@@ -78,26 +78,29 @@ class TerminalFarm:
     def generate_daily_quests(self):
         self.daily_quests = []
         quest_types = [
-            ("Plantar {count} {crop}", lambda c, crop: self.count_planted_crops(crop) >= c),
-            ("Colher {count} {crop}", lambda c, crop: self.count_harvested_crops(crop) >= c),
-            ("Ganhar ${amount}", lambda a: self.money >= a)
+            ("Plantar {count} {crop}", "plant"),
+            ("Colher {count} {crop}", "harvest"),
+            ("Ganhar ${amount}", "money")
         ]
         
         for _ in range(3):  # 3 missões diárias
-            quest_type, condition = random.choice(quest_types)
-            if "crop" in quest_type:
+            quest_type, quest_kind = random.choice(quest_types)
+            if quest_kind in ["plant", "harvest"]:
                 crop = random.choice(self.unlocked_crops)
                 count = random.randint(2, 5)
                 self.daily_quests.append({
                     "text": quest_type.format(count=count, crop=crop),
-                    "condition": lambda c=count, cr=crop: condition(c, cr),
+                    "kind": quest_kind,
+                    "crop": crop,
+                    "count": count,
                     "completed": False
                 })
             else:
                 amount = random.randint(100, 300)
                 self.daily_quests.append({
                     "text": quest_type.format(amount=amount),
-                    "condition": lambda a=amount: condition(a),
+                    "kind": quest_kind,
+                    "amount": amount,
                     "completed": False
                 })
     
@@ -105,17 +108,18 @@ class TerminalFarm:
         self.progress_quests = [
             {
                 "text": "Expandir fazenda pela primeira vez",
-                "condition": lambda: len(self.unlocked_expansions) > 0,
+                "kind": "expansion",
                 "completed": False
             },
             {
                 "text": "Desbloquear todas as culturas",
-                "condition": lambda: len(self.unlocked_crops) == len(self.default_crops),
+                "kind": "unlock_all",
                 "completed": False
             },
             {
                 "text": "Ter $1000 no banco",
-                "condition": lambda: self.money >= 1000,
+                "kind": "money",
+                "amount": 1000,
                 "completed": False
             }
         ]
@@ -130,23 +134,41 @@ class TerminalFarm:
     def check_quests(self):
         # Verificar missões diárias
         for quest in self.daily_quests:
-            if not quest["completed"] and quest["condition"]():
-                quest["completed"] = True
-                self.money += self.quest_rewards["daily"]["money"]
-                self.stamina = min(self.max_stamina, self.stamina + self.quest_rewards["daily"]["stamina"])
-                print(self.color_text(f"\nMissão diária completada: {quest['text']}", "bright_green"))
-                print(self.color_text(f"Recompensa: ${self.quest_rewards['daily']['money']} e {self.quest_rewards['daily']['stamina']} coração(ões)", "yellow"))
-                time.sleep(2)
+            if not quest["completed"]:
+                completed = False
+                if quest["kind"] == "plant":
+                    completed = self.count_planted_crops(quest["crop"]) >= quest["count"]
+                elif quest["kind"] == "harvest":
+                    completed = self.count_harvested_crops(quest["crop"]) >= quest["count"]
+                elif quest["kind"] == "money":
+                    completed = self.money >= quest["amount"]
+                
+                if completed:
+                    quest["completed"] = True
+                    self.money += self.quest_rewards["daily"]["money"]
+                    self.stamina = min(self.max_stamina, self.stamina + self.quest_rewards["daily"]["stamina"])
+                    print(self.color_text(f"\nMissão diária completada: {quest['text']}", "bright_green"))
+                    print(self.color_text(f"Recompensa: ${self.quest_rewards['daily']['money']} e {self.quest_rewards['daily']['stamina']} coração(ões)", "yellow"))
+                    time.sleep(2)
         
         # Verificar missões de progresso
         for quest in self.progress_quests:
-            if not quest["completed"] and quest["condition"]():
-                quest["completed"] = True
-                self.money += self.quest_rewards["progress"]["money"]
-                self.stamina = min(self.max_stamina, self.stamina + self.quest_rewards["progress"]["stamina"])
-                print(self.color_text(f"\nMissão de progresso completada: {quest['text']}", "bright_green"))
-                print(self.color_text(f"Recompensa: ${self.quest_rewards['progress']['money']} e {self.quest_rewards['progress']['stamina']} coração(ões)", "yellow"))
-                time.sleep(2)
+            if not quest["completed"]:
+                completed = False
+                if quest["kind"] == "expansion":
+                    completed = len(self.unlocked_expansions) > 0
+                elif quest["kind"] == "unlock_all":
+                    completed = len(self.unlocked_crops) == len(self.default_crops)
+                elif quest["kind"] == "money":
+                    completed = self.money >= quest["amount"]
+                
+                if completed:
+                    quest["completed"] = True
+                    self.money += self.quest_rewards["progress"]["money"]
+                    self.stamina = min(self.max_stamina, self.stamina + self.quest_rewards["progress"]["stamina"])
+                    print(self.color_text(f"\nMissão de progresso completada: {quest['text']}", "bright_green"))
+                    print(self.color_text(f"Recompensa: ${self.quest_rewards['progress']['money']} e {self.quest_rewards['progress']['stamina']} coração(ões)", "yellow"))
+                    time.sleep(2)
     
     def display_quests(self):
         print(f"\n{self.color_text('Missões Diárias:', 'bright_blue')}")
