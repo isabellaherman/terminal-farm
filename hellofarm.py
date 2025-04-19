@@ -166,14 +166,21 @@ class TerminalFarm:
         greeting = self.get_greeting()
         
         stamina_display = self.display_stamina()
-        
+
+        BOX_WIDTH = 44
+        INNER_WIDTH = BOX_WIDTH - 2 
+        BOX_BORDER_HORIZONTAL = "═" * BOX_WIDTH
+        BOX_TITLE_SPACING = 20 
+        GREETING_PADDING = 39  
+        STAMINA_PADDING = 24  
+
         header = f"""
-{self.color_text('╔════════════════════════════════════════════╗', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  {self.color_text('🌱 TERMINAL FARM', 'bright_green')}                  {self.color_text(f'Day {self.day}', 'yellow')}  {self.color_text('║', 'bright_cyan')}
-{self.color_text('╠════════════════════════════════════════════╣', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  {self.color_text(f'{greeting}, {username}!', 'green')}{' '*(36-len(greeting)-len(username))}{self.color_text('║', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  Stamina: {stamina_display}{' '*(36-9-len(stamina_display))}{self.color_text('║', 'bright_cyan')}
-{self.color_text('╚════════════════════════════════════════════╝', 'bright_cyan')}
+{self.color_text(f'╔{BOX_BORDER_HORIZONTAL}╗', 'bright_cyan')}
+{self.color_text('║', 'bright_cyan')}  {self.color_text('🌱 TERMINAL FARM', 'bright_green')}{' ' * (BOX_TITLE_SPACING - len(str(self.day)))}{self.color_text(f'Day {self.day}', 'yellow')}  {self.color_text('║', 'bright_cyan')}
+{self.color_text(f'╠{BOX_BORDER_HORIZONTAL}╣', 'bright_cyan')}
+{self.color_text('║', 'bright_cyan')}  {self.color_text(f'{greeting}, {username}!', 'green')}{' ' * (GREETING_PADDING - len(greeting) - len(username))}{self.color_text('║', 'bright_cyan')}
+{self.color_text('║', 'bright_cyan')}  Stamina: {stamina_display}{' ' * STAMINA_PADDING}{self.color_text('║', 'bright_cyan')}
+{self.color_text(f'╚{BOX_BORDER_HORIZONTAL}╝', 'bright_cyan')}
 """
         print(header)
     
