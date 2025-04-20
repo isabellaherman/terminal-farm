@@ -4,139 +4,440 @@ import time
 import random
 import sys
 from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple, Any
 
-class TerminalFarm:
+# ==================== Interfaces e Classes Base ====================
+class ISerializable(ABC):
+    @abstractmethod
+    def to_dict(self) -> Dict[str, Any]:
+        pass
+    
+    @classmethod
+    @abstractmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Any:
+        pass
+
+class IGameSystem(ABC):
+    @abstractmethod
+    def update(self):
+        pass
+
+# ==================== Modelos do Jogo ====================
+class Crop(ISerializable):
+    def __init__(self, name: str, cost: int, growth_time: int, value: int, 
+                 color: str, stamina_cost: float):
+        self.name = name
+        self.cost = cost
+        self.growth_time = growth_time
+        self.value = value
+        self.color = color
+        self.stamina_cost = stamina_cost
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'name': self.name,
+            'cost': self.cost,
+            'growth_time': self.growth_time,
+            'value': self.value,
+            'color': self.color,
+            'stamina_cost': self.stamina_cost
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Crop':
+        return cls(
+            name=data['name'],
+            cost=data['cost'],
+            growth_time=data['growth_time'],
+            value=data['value'],
+            color=data['color'],
+            stamina_cost=data['stamina_cost']
+        )
+
+class Plot(ISerializable):
+    def __init__(self, crop: Optional[Crop] = None, planted_at: Optional[datetime] = None):
+        self.crop = crop
+        self.planted_at = planted_at
+    
+    @property
+    def is_empty(self) -> bool:
+        return self.crop is None
+    
+    @property
+    def growth_progress(self) -> float:
+        if self.is_empty or self.planted_at is None:
+            return 0.0
+        
+        elapsed = (datetime.now() - self.planted_at).total_seconds()
+        return min(1.0, elapsed / self.crop.growth_time)
+    
+    @property
+    def is_ready(self) -> bool:
+        return self.growth_progress >= 1.0
+    
+    def plant(self, crop: Crop):
+        self.crop = crop
+        self.planted_at = datetime.now()
+    
+    def harvest(self) -> int:
+        if self.is_empty or not self.is_ready:
+            return 0
+        
+        value = self.crop.value
+        self.crop = None
+        self.planted_at = None
+        return value
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'crop': self.crop.to_dict() if self.crop else None,
+            'planted_at': self.planted_at.isoformat() if self.planted_at else None
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Plot':
+        crop_data = data['crop']
+        planted_at = data['planted_at']
+        
+        return cls(
+            crop=Crop.from_dict(crop_data) if crop_data else None,
+            planted_at=datetime.fromisoformat(planted_at) if planted_at else None
+        )
+
+class Player(ISerializable):
+    def __init__(self, money: int = 50, stamina: float = 5.0, 
+                 max_stamina: int = 5, last_sleep_time: Optional[datetime] = None):
+        self.money = money
+        self.stamina = stamina
+        self.max_stamina = max_stamina
+        self.last_sleep_time = last_sleep_time or datetime.now()
+    
+    def can_afford(self, amount: int) -> bool:
+        return self.money >= amount
+    
+    def spend_money(self, amount: int):
+        self.money -= amount
+    
+    def earn_money(self, amount: int):
+        self.money += amount
+    
+    def has_stamina(self, amount: float) -> bool:
+        return self.stamina >= amount
+    
+    def use_stamina(self, amount: float):
+        self.stamina -= amount
+    
+    def restore_stamina(self, amount: float):
+        self.stamina = min(self.max_stamina, self.stamina + amount)
+    
+    def full_restore(self):
+        self.stamina = self.max_stamina
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'money': self.money,
+            'stamina': self.stamina,
+            'max_stamina': self.max_stamina,
+            'last_sleep_time': self.last_sleep_time.isoformat()
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Player':
+        return cls(
+            money=data['money'],
+            stamina=data['stamina'],
+            max_stamina=data['max_stamina'],
+            last_sleep_time=datetime.fromisoformat(data['last_sleep_time'])
+        )
+
+# ==================== Sistemas do Jogo ====================
+class FarmSystem(ISerializable):
+    def __init__(self, size: int = 9):
+        self.plots = [Plot() for _ in range(size)]
+    
+    def plant_crop(self, plot_index: int, crop: Crop):
+        if 0 <= plot_index < len(self.plots):
+            self.plots[plot_index].plant(crop)
+    
+    def harvest_ready_crops(self) -> int:
+        total = 0
+        for plot in self.plots:
+            if not plot.is_empty and plot.is_ready:
+                total += plot.harvest()
+        return total
+    
+    def get_plot_status(self, plot_index: int) -> Tuple[Optional[Crop], float]:
+        if 0 <= plot_index < len(self.plots):
+            plot = self.plots[plot_index]
+            return plot.crop, plot.growth_progress
+        return None, 0.0
+    
+    def damage_random_crop(self):
+        occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
+        if occupied_plots:
+            plot_idx = random.choice(occupied_plots)
+            self.plots[plot_idx] = Plot()
+            return "A storm came! Some crops were damaged."
+        return None
+    
+    def apply_growth_bonus(self, bonus_percent: float):
+        for plot in self.plots:
+            if not plot.is_empty and plot.planted_at:
+                bonus_time = plot.crop.growth_time * (bonus_percent / 100)
+                plot.planted_at -= timedelta(seconds=bonus_time)
+        return "Sunny day bonus! Crops grow faster today."
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'plots': [plot.to_dict() for plot in self.plots]
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'FarmSystem':
+        farm = cls(size=len(data['plots']))
+        farm.plots = [Plot.from_dict(plot_data) for plot_data in data['plots']]
+        return farm
+
+class CropSystem(ISerializable):
+    def __init__(self):
+        self.available_crops = self._load_default_crops()
+        self.unlocked_crops = ['wheat']
+    
+    def _load_default_crops(self) -> Dict[str, Crop]:
+        return {
+            'wheat': Crop('wheat', 10, 10, 20, 'yellow', 0.5),
+            'corn': Crop('corn', 20, 20, 45, 'bright_yellow', 0.5),
+            'pumpkin': Crop('pumpkin', 40, 40, 100, 'orange', 1.0)
+        }
+    
+    def get_crop(self, name: str) -> Optional[Crop]:
+        return self.available_crops.get(name)
+    
+    def unlock_crop(self, name: str):
+        if name in self.available_crops and name not in self.unlocked_crops:
+            self.unlocked_crops.append(name)
+            return f"NEW CROP UNLOCKED: {name.capitalize()}!"
+        return None
+    
+    def get_unlocked_crops(self) -> List[Crop]:
+        return [self.available_crops[name] for name in self.unlocked_crops]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'unlocked_crops': self.unlocked_crops
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'CropSystem':
+        system = cls()
+        system.unlocked_crops = data['unlocked_crops']
+        return system
+
+class WeatherSystem(IGameSystem):
+    WEATHER_TYPES = ['sunny', 'rainy', 'cloudy', 'windy']
+    
+    def __init__(self):
+        self.current_weather = 'sunny'
+    
+    def update(self):
+        if random.random() < 0.2:
+            self.current_weather = random.choice(self.WEATHER_TYPES)
+    
+    def get_weather(self) -> str:
+        return self.current_weather
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'current_weather': self.current_weather
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'WeatherSystem':
+        system = cls()
+        system.current_weather = data['current_weather']
+        return system
+
+class TimeSystem(IGameSystem):
+    def __init__(self):
+        self.day = 1
+    
+    def update(self):
+        self.day += 1
+    
+    def get_day(self) -> int:
+        return self.day
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'day': self.day
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'TimeSystem':
+        system = cls()
+        system.day = data['day']
+        return system
+
+class EventSystem(IGameSystem):
+    def __init__(self, farm: FarmSystem, player: Player):
+        self.farm = farm
+        self.player = player
+        self.last_event_day = -1
+    
+    def update(self):
+        if random.random() < 0.2 and self.last_event_day != self.farm.game.time_system.day:
+            self.last_event_day = self.farm.game.time_system.day
+            event = random.choice([
+                self._storm_event,
+                self._sunny_bonus_event,
+                self._found_money_event,
+                self._found_energy_event
+            ])
+            return event()
+        return None
+    
+    def _storm_event(self):
+        return self.farm.damage_random_crop()
+    
+    def _sunny_bonus_event(self):
+        return self.farm.apply_growth_bonus(20)
+    
+    def _found_money_event(self):
+        amount = random.randint(10, 50)
+        self.player.earn_money(amount)
+        return f"You found money on the ground! (+${amount})"
+    
+    def _found_energy_event(self):
+        self.player.restore_stamina(1)
+        return "You found an energy drink! (+1 heart)"
+
+# ==================== Gerenciamento do Jogo ====================
+class GameState(ISerializable):
     SAVE_FILE = "terminal_farmer_save.json"
     
     def __init__(self):
-        self.colors = {
-            "reset": "\033[0m",
-            "green": "\033[32m",
-            "bright_green": "\033[1;32m",
-            "yellow": "\033[33m",
-            "bright_yellow": "\033[1;33m",
-            "blue": "\033[34m",
-            "bright_blue": "\033[1;34m",
-            "cyan": "\033[36m",
-            "bright_cyan": "\033[1;36m",
-            "red": "\033[31m",
-            "bright_red": "\033[1;31m",
-            "orange": "\033[38;5;208m",
-            "gray": "\033[90m",
-            "white": "\033[97m",
-            "pink": "\033[38;5;213m",
-            "heart_red": "\033[38;5;161m"
-        }
+        self.player = Player()
+        self.farm = FarmSystem()
+        self.crop_system = CropSystem()
+        self.weather_system = WeatherSystem()
+        self.time_system = TimeSystem()
+        self.event_system = EventSystem(self.farm, self.player)
         
-        # Sistema de stamina (corações)
-        self.max_stamina = 5
-        self.stamina = 5
-        self.last_sleep_time = datetime.now()
-        
-        # Cultivos padrão (agora com custo de stamina)
-        self.default_crops = {
-            "wheat": {"cost": 10, "growth_time": 10, "value": 20, "color": "yellow", "stamina_cost": 0.5},
-            "corn": {"cost": 20, "growth_time": 20, "value": 45, "color": "bright_yellow", "stamina_cost": 0.5},
-            "pumpkin": {"cost": 40, "growth_time": 40, "value": 100, "color": "orange", "stamina_cost": 1}
-        }
-        
-        if os.path.exists(self.SAVE_FILE):
-            self.load_game()
-        else:
-            self.new_game()
+        self.farm.game = self
+        self.event_system.game = self
     
-    def new_game(self):
-        self.money = 50
-        self.farm = [None] * 9
-        self.crops = self.default_crops.copy()
-        self.unlocked_crops = ["wheat"]
-        self.day = 1
-        self.weather = "sunny"
-        self.stamina = self.max_stamina
-        self.last_sleep_time = datetime.now()
+    def next_day(self) -> Tuple[bool, Optional[str]]:
+        """Advance to next day, returns (success, event_message)"""
+        if not self.player.has_stamina(1.0):
+            return False, None
+        
+        self.player.use_stamina(1.0)
+        self.time_system.update()
+        self.weather_system.update()
+        
+        unlock_message = None
+        if self.time_system.day == 3 and 'corn' not in self.crop_system.unlocked_crops:
+            unlock_message = self.crop_system.unlock_crop('corn')
+        elif self.time_system.day == 7 and 'pumpkin' not in self.crop_system.unlocked_crops:
+            unlock_message = self.crop_system.unlock_crop('pumpkin')
+        
+        event_message = self.event_system.update()
+        
+        return True, unlock_message or event_message
     
-    def save_game(self):
+    def save(self) -> bool:
         try:
-            farm_data = []
-            for plot in self.farm:
-                if plot is None:
-                    farm_data.append(None)
-                else:
-                    crop, planted_at = plot
-                    farm_data.append({
-                        "crop": crop,
-                        "planted_at": planted_at.isoformat()
-                    })
-            
-            save_data = {
-                "money": self.money,
-                "farm": farm_data,
-                "unlocked_crops": self.unlocked_crops,
-                "day": self.day,
-                "weather": self.weather,
-                "stamina": self.stamina,
-                "last_sleep_time": self.last_sleep_time.isoformat(),
-                "max_stamina": self.max_stamina
-            }
-            
             with open(self.SAVE_FILE, 'w') as f:
-                json.dump(save_data, f)
+                json.dump(self.to_dict(), f)
             return True
         except Exception as e:
-            print(self.color_text(f"Error saving game: {e}", "red"))
+            print(f"Error saving game: {e}")
             return False
     
-    def load_game(self):
+    def load(self) -> bool:
         try:
+            if not os.path.exists(self.SAVE_FILE):
+                return False
+            
             with open(self.SAVE_FILE, 'r') as f:
-                save_data = json.load(f)
+                data = json.load(f)
+                self.from_dict(data)
             
-            self.money = save_data["money"]
-            self.farm = []
-            for plot in save_data["farm"]:
-                if plot is None:
-                    self.farm.append(None)
-                else:
-                    self.farm.append((
-                        plot["crop"],
-                        datetime.fromisoformat(plot["planted_at"])
-                    ))
-            self.unlocked_crops = save_data["unlocked_crops"]
-            self.day = save_data["day"]
-            self.weather = save_data["weather"]
-            self.stamina = save_data.get("stamina", self.max_stamina)
-            self.max_stamina = save_data.get("max_stamina", 5)
-            self.last_sleep_time = datetime.fromisoformat(save_data.get("last_sleep_time", datetime.now().isoformat()))
-            self.crops = self.default_crops.copy()
+            # Restore stamina based on time passed
+            time_passed = datetime.now() - self.player.last_sleep_time
+            hours_passed = time_passed.total_seconds() / 3600
+            stamina_to_restore = min(int(hours_passed / 2), 
+                                   self.player.max_stamina - self.player.stamina)
+            if stamina_to_restore > 0:
+                self.player.restore_stamina(stamina_to_restore)
             
-            # Restaurar stamina baseado no tempo passado
-            self.restore_stamina_over_time()
-            
+            return True
         except Exception as e:
-            print(self.color_text(f"Error loading save: {e}, starting new game", "red"))
-            time.sleep(2)
-            self.new_game()
+            print(f"Error loading game: {e}")
+            return False
     
-    def restore_stamina_over_time(self):
-        """Restaura stamina baseado no tempo desde o último jogo"""
-        time_passed = datetime.now() - self.last_sleep_time
-        hours_passed = time_passed.total_seconds() / 3600
-        
-        # Restaura 1 coração a cada 2 horas
-        stamina_to_restore = min(int(hours_passed / 2), self.max_stamina - self.stamina)
-        if stamina_to_restore > 0:
-            self.stamina += stamina_to_restore
-            print(self.color_text(f"\nVocê descansou e recuperou {stamina_to_restore} coração(s) enquanto estava fora!", "pink"))
-            time.sleep(1)
+    def new_game(self):
+        self.__init__()
     
-    def color_text(self, text, color):
-        return f"{self.colors.get(color, '')}{text}{self.colors['reset']}"
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'player': self.player.to_dict(),
+            'farm': self.farm.to_dict(),
+            'crop_system': self.crop_system.to_dict(),
+            'weather_system': self.weather_system.to_dict(),
+            'time_system': self.time_system.to_dict()
+        }
     
-    def display_stamina(self):
-        """Mostra a barra de stamina com corações"""
-        full_hearts = int(self.stamina)
-        half_heart = (self.stamina - full_hearts) >= 0.5
-        empty_hearts = self.max_stamina - full_hearts - (1 if half_heart else 0)
+    def from_dict(self, data: Dict[str, Any]):
+        self.player = Player.from_dict(data['player'])
+        self.farm = FarmSystem.from_dict(data['farm'])
+        self.crop_system = CropSystem.from_dict(data['crop_system'])
+        self.weather_system = WeatherSystem.from_dict(data['weather_system'])
+        self.time_system = TimeSystem.from_dict(data['time_system'])
+        self.event_system = EventSystem(self.farm, self.player)
+
+# ==================== Interface do Usuário ====================
+class TerminalUI:
+    COLORS = {
+        "reset": "\033[0m",
+        "green": "\033[32m",
+        "bright_green": "\033[1;32m",
+        "yellow": "\033[33m",
+        "bright_yellow": "\033[1;33m",
+        "blue": "\033[34m",
+        "bright_blue": "\033[1;34m",
+        "cyan": "\033[36m",
+        "bright_cyan": "\033[1;36m",
+        "red": "\033[31m",
+        "bright_red": "\033[1;31m",
+        "orange": "\033[38;5;208m",
+        "gray": "\033[90m",
+        "white": "\033[97m",
+        "pink": "\033[38;5;213m",
+        "heart_red": "\033[38;5;161m"
+    }
+    
+    WEATHER_ICONS = {
+        "sunny": "☀️",
+        "rainy": "🌧️",
+        "cloudy": "☁️",
+        "windy": "🌬️"
+    }
+    
+    def __init__(self, game_state: GameState):
+        self.game = game_state
+    
+    def clear_screen(self):
+        print("\033[H\033[J")
+    
+    def color_text(self, text: str, color: str) -> str:
+        return f"{self.COLORS.get(color, '')}{text}{self.COLORS['reset']}"
+    
+    def display_stamina(self, stamina: float, max_stamina: int) -> str:
+        full_hearts = int(stamina)
+        half_heart = (stamina - full_hearts) >= 0.5
+        empty_hearts = max_stamina - full_hearts - (1 if half_heart else 0)
         
         hearts = []
         hearts.extend([self.color_text("♥", "heart_red")] * full_hearts)
@@ -146,10 +447,7 @@ class TerminalFarm:
         
         return " ".join(hearts)
     
-    def clear_screen(self):
-        print("\033[H\033[J")
-    
-    def get_greeting(self):
+    def get_greeting(self) -> str:
         hour = datetime.now().hour
         if 5 <= hour < 12:
             return "Good morning"
@@ -165,7 +463,10 @@ class TerminalFarm:
         username = getpass.getuser()
         greeting = self.get_greeting()
         
-        stamina_display = self.display_stamina()
+        stamina_display = self.display_stamina(
+            self.game.player.stamina, 
+            self.game.player.max_stamina
+        )
 
         BOX_WIDTH = 44
         INNER_WIDTH = BOX_WIDTH - 2 
@@ -176,7 +477,7 @@ class TerminalFarm:
 
         header = f"""
 {self.color_text(f'╔{BOX_BORDER_HORIZONTAL}╗', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  {self.color_text('🌱 TERMINAL FARM', 'bright_green')}{' ' * (BOX_TITLE_SPACING - len(str(self.day)))}{self.color_text(f'Day {self.day}', 'yellow')}  {self.color_text('║', 'bright_cyan')}
+{self.color_text('║', 'bright_cyan')}  {self.color_text('🌱 TERMINAL FARM', 'bright_green')}{' ' * (BOX_TITLE_SPACING - len(str(self.game.time_system.day)))}{self.color_text(f'Day {self.game.time_system.day}', 'yellow')}  {self.color_text('║', 'bright_cyan')}
 {self.color_text(f'╠{BOX_BORDER_HORIZONTAL}╣', 'bright_cyan')}
 {self.color_text('║', 'bright_cyan')}  {self.color_text(f'{greeting}, {username}!', 'green')}{' ' * (GREETING_PADDING - len(greeting) - len(username))}{self.color_text('║', 'bright_cyan')}
 {self.color_text('║', 'bright_cyan')}  Stamina: {stamina_display}{' ' * STAMINA_PADDING}{self.color_text('║', 'bright_cyan')}
@@ -185,16 +486,12 @@ class TerminalFarm:
         print(header)
     
     def display_status(self):
-        weather_icons = {
-            "sunny": "☀️",
-            "rainy": "🌧️",
-            "cloudy": "☁️",
-            "windy": "🌬️"
-        }
+        weather = self.game.weather_system.get_weather()
+        weather_icon = self.WEATHER_ICONS.get(weather, '')
         
         status = f"""
 {self.color_text('══════════════════════════════════════════════', 'bright_cyan')}
-{self.color_text('💰 Money:', 'bright_yellow')} {self.color_text(f'${self.money}', 'yellow')}   {self.color_text('Weather:', 'bright_blue')} {weather_icons.get(self.weather, '')} {self.color_text(self.weather.capitalize(), 'blue')}
+{self.color_text('💰 Money:', 'bright_yellow')} {self.color_text(f'${self.game.player.money}', 'yellow')}   {self.color_text('Weather:', 'bright_blue')} {weather_icon} {self.color_text(weather.capitalize(), 'blue')}
 {self.color_text('══════════════════════════════════════════════', 'bright_cyan')}
 """
         print(status)
@@ -209,13 +506,11 @@ class TerminalFarm:
         for i in range(0, 9, 3):
             row = []
             for j in range(3):
-                plot = self.farm[i+j]
-                if plot:
-                    crop, planted_at = plot
-                    crop_info = self.crops[crop]
-                    growth_time = crop_info["growth_time"]
-                    elapsed = (datetime.now() - planted_at).total_seconds()
-                    growth_percent = min(100, int((elapsed / growth_time) * 100))
+                plot_idx = i + j
+                crop, progress = self.game.farm.get_plot_status(plot_idx)
+                
+                if crop:
+                    growth_percent = int(progress * 100)
                     
                     if growth_percent < 33:
                         growth_color = "red"
@@ -225,9 +520,9 @@ class TerminalFarm:
                         growth_color = "green"
                     
                     if growth_percent < 100:
-                        display_text = f"{self.color_text(crop[0].upper(), crop_info['color'])}:{self.color_text(f'{growth_percent}%', growth_color)}"
+                        display_text = f"{self.color_text(crop.name[0].upper(), crop.color)}:{self.color_text(f'{growth_percent}%', growth_color)}"
                     else:
-                        display_text = f"{self.color_text(crop[0].upper(), crop_info['color'])}:{self.color_text('READY!', 'bright_green')}"
+                        display_text = f"{self.color_text(crop.name[0].upper(), crop.color)}:{self.color_text('READY!', 'bright_green')}"
                 else:
                     display_text = self.color_text("[Empty]", "gray")
                 
@@ -237,38 +532,34 @@ class TerminalFarm:
         
         print("\n")
     
-    def use_stamina(self, amount):
-        """Tenta usar stamina e retorna True se bem-sucedido"""
-        if self.stamina >= amount:
-            self.stamina -= amount
-            return True
-        print(self.color_text(f"\nVocê está muito cansado! Precisa de {amount} coração(ões) para esta ação.", "red"))
-        time.sleep(1)
-        return False
-    
-    def plant_crop(self):
+    def plant_crop_menu(self):
         self.display_farm()
+        unlocked_crops = self.game.crop_system.get_unlocked_crops()
+        
         print(f"{self.color_text('Available Crops:', 'bright_blue')}")
-        for i, crop in enumerate(self.unlocked_crops, 1):
-            crop_info = self.crops[crop]
-            cost = self.color_text(f"${crop_info['cost']}", "yellow")
-            value = self.color_text(f"${crop_info['value']}", "bright_yellow")
-            stamina = self.color_text(f"{crop_info['stamina_cost']}♥", "pink")
-            print(f"{self.color_text(f'{i}.', 'white')} {self.color_text(crop.capitalize(), crop_info['color'])} "
-                  f"(Cost: {cost}, Value: {value}, Stamina: {stamina}, Time: {crop_info['growth_time']}s)")
+        for i, crop in enumerate(unlocked_crops, 1):
+            cost = self.color_text(f"${crop.cost}", "yellow")
+            value = self.color_text(f"${crop.value}", "bright_yellow")
+            stamina = self.color_text(f"{crop.stamina_cost}♥", "pink")
+            print(f"{self.color_text(f'{i}.', 'white')} {self.color_text(crop.name.capitalize(), crop.color)} "
+                  f"(Cost: {cost}, Value: {value}, Stamina: {stamina}, Time: {crop.growth_time}s)")
         
         try:
             choice = input(f"\n{self.color_text('Choose crop to plant', 'bright_cyan')} (0 to cancel): ")
             if choice == "0":
                 return
-            choice = int(choice) - 1
-            crop = self.unlocked_crops[choice]
-            crop_info = self.crops[crop]
             
-            if not self.use_stamina(crop_info["stamina_cost"]):
+            crop_idx = int(choice) - 1
+            if crop_idx < 0 or crop_idx >= len(unlocked_crops):
+                raise IndexError
+            
+            crop = unlocked_crops[crop_idx]
+            
+            if not self.game.player.has_stamina(crop.stamina_cost):
+                input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
                 return
                 
-            if self.money < crop_info["cost"]:
+            if not self.game.player.can_afford(crop.cost):
                 input(f"{self.color_text('Not enough money!', 'red')} Press Enter...")
                 return
                 
@@ -280,133 +571,60 @@ class TerminalFarm:
             plot = int(input(f"{self.color_text('Choose plot', 'bright_cyan')} (1-9): ")) - 1
             if plot < 0 or plot > 8:
                 return
-            if self.farm[plot]:
+            
+            if not self.game.farm.plots[plot].is_empty:
                 input(f"{self.color_text('Plot already occupied!', 'red')} Press Enter...")
                 return
                 
-            self.money -= crop_info["cost"]
-            self.farm[plot] = (crop, datetime.now())
-            print(f"\n{self.color_text(f'Planted {crop} in plot {plot+1}!', 'green')}")
+            self.game.player.spend_money(crop.cost)
+            self.game.player.use_stamina(crop.stamina_cost)
+            self.game.farm.plant_crop(plot, crop)
+            print(f"\n{self.color_text(f'Planted {crop.name} in plot {plot+1}!', 'green')}")
             time.sleep(1)
             
         except (ValueError, IndexError):
             input(f"{self.color_text('Invalid choice!', 'red')} Press Enter...")
             return
     
-    def harvest_crop(self):
-        if not self.use_stamina(0.5):  # Custa meio coração para colher
+    def harvest_menu(self):
+        if not self.game.player.has_stamina(0.5):
+            input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
             return
             
-        harvested = False
-        for i in range(len(self.farm)):
-            if self.farm[i]:
-                crop, planted_at = self.farm[i]
-                growth_time = self.crops[crop]["growth_time"]
-                elapsed = (datetime.now() - planted_at).total_seconds()
-                if elapsed >= growth_time:
-                    self.money += self.crops[crop]["value"]
-                    self.farm[i] = None
-                    harvested = True
-                    print(f"{self.color_text('Harvested', 'green')} {self.color_text(crop, self.crops[crop]['color'])} "
-                          f"for {self.color_text('$' + str(self.crops[crop]['value']), 'bright_yellow')}!")
+        harvested_value = self.game.farm.harvest_ready_crops()
         
-        if not harvested:
+        if harvested_value > 0:
+            self.game.player.earn_money(harvested_value)
+            self.game.player.use_stamina(0.5)
+            print(f"{self.color_text(f'Harvested crops worth ${harvested_value}!', 'green')}")
+        else:
             print(f"{self.color_text('Nothing ready to harvest yet!', 'yellow')}")
         time.sleep(1)
     
-    def check_unlocks(self):
-        if self.day == 3 and "corn" not in self.unlocked_crops:
-            self.unlocked_crops.append("corn")
-            print(f"\n{self.color_text('NEW CROP UNLOCKED: Corn!', 'bright_yellow')}")
-            time.sleep(1)
-        if self.day == 7 and "pumpkin" not in self.unlocked_crops:
-            self.unlocked_crops.append("pumpkin")
-            print(f"\n{self.color_text('NEW CROP UNLOCKED: Pumpkin!', 'bright_yellow')}")
-            time.sleep(1)
-        
-    def next_day(self):
-        if not self.use_stamina(1):  # Passar o dia custa 1 coração
-            return
-            
-        self.day += 1
-        self.change_weather()
-        self.check_unlocks()
-        
-        if random.random() < 0.2:
-            self.random_event()
-    
-    def change_weather(self):
-        weather_types = ["sunny", "rainy", "cloudy", "windy"]
-        self.weather = random.choice(weather_types)
-    
-    def random_event(self):
-        events = [
-            ("A storm came! Some crops were damaged.", lambda: self.damage_random_crop()),
-            ("Sunny day bonus! Crops grow faster today.", lambda: self.growth_bonus()),
-            ("You found money on the ground!", lambda: self.found_money()),
-            ("You found an energy drink! +1 heart", lambda: self.found_energy())
-        ]
-        event_text, event_func = random.choice(events)
-        print(f"\n{self.color_text('EVENT:', 'bright_blue')} {event_text}")
-        event_func()
-        time.sleep(2)
-    
-    def damage_random_crop(self):
-        occupied_plots = [i for i, plot in enumerate(self.farm) if plot]
-        if occupied_plots:
-            plot = random.choice(occupied_plots)
-            self.farm[plot] = None
-    
-    def growth_bonus(self):
-        for i in range(len(self.farm)):
-            if self.farm[i]:
-                crop, planted_at = self.farm[i]
-                new_planted_at = planted_at - timedelta(seconds=self.crops[crop]["growth_time"] * 0.2)
-                self.farm[i] = (crop, new_planted_at)
-    
-    def found_money(self):
-        amount = random.randint(10, 50)
-        self.money += amount
-        print(f"{self.color_text('Found', 'green')} {self.color_text(f'${amount}', 'bright_yellow')}!")
-    
-    def found_energy(self):
-        self.stamina = min(self.max_stamina, self.stamina + 1)
-    
-    def sleep_options(self):
+    def sleep_menu(self):
         self.clear_screen()
         print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
-        print(f"1. {self.color_text('Sleep until next day', 'cyan')} (Recupera todos os corações)")
-        print(f"2. {self.color_text('Take a nap (2 hours)', 'cyan')} (Recupera 1 coração)")
+        print(f"1. {self.color_text('Sleep until next day', 'cyan')} (Recover all hearts)")
+        print(f"2. {self.color_text('Take a nap (2 hours)', 'cyan')} (Recover 1 heart)")
         print(f"3. {self.color_text('Cancel', 'red')}")
         
         choice = input("\nChoose option: ")
         if choice == "1":
-            self.day += 1
-            self.stamina = self.max_stamina
-            self.last_sleep_time = datetime.now()
-            self.change_weather()
-            self.check_unlocks()
-            print(self.color_text("\nVocê dormiu profundamente e acordou renovado no próximo dia!", "bright_green"))
-            time.sleep(1)
+            success, message = self.game.next_day()
+            self.game.player.full_restore()
+            self.game.player.last_sleep_time = datetime.now()
+            
+            print(self.color_text("\nYou slept soundly and woke up refreshed the next day!", "bright_green"))
+            if message:
+                print(f"{self.color_text('EVENT:', 'bright_blue')} {message}")
+            time.sleep(2)
         elif choice == "2":
-            # Restaura 1 coração por 2 horas de descanso
-            self.stamina = min(self.max_stamina, self.stamina + 1)
-            self.last_sleep_time = datetime.now()
-            print(self.color_text("\nVocê tirou uma soneca revigorante e recuperou 1 coração!", "green"))
+            self.game.player.restore_stamina(1)
+            self.game.player.last_sleep_time = datetime.now()
+            print(self.color_text("\nYou took a refreshing nap and recovered 1 heart!", "green"))
             time.sleep(1)
     
-    def reset_game(self):
-        try:
-            if os.path.exists(self.SAVE_FILE):
-                os.remove(self.SAVE_FILE)
-            print(self.color_text("Game reset successfully!", "green"))
-            time.sleep(1)
-            self.new_game()
-        except Exception as e:
-            print(self.color_text(f"Error resetting game: {e}", "red"))
-            time.sleep(1)
-    
-    def main_loop(self):
+    def main_menu(self):
         while True:
             self.display_farm()
             print(f"{self.color_text('Actions:', 'bright_blue')}")
@@ -420,30 +638,51 @@ class TerminalFarm:
             choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
             
             if choice == "1":
-                self.plant_crop()
+                self.plant_crop_menu()
             elif choice == "2":
-                self.harvest_crop()
+                self.harvest_menu()
             elif choice == "3":
-                self.next_day()
+                success, message = self.game.next_day()
+                if success:
+                    print(f"{self.color_text('Advanced to day', 'blue')} "
+                          f"{self.color_text(self.game.time_system.day, 'bright_blue')}!")
+                    if message:
+                        print(f"{self.color_text('EVENT:', 'bright_blue')} {message}")
+                    time.sleep(2)
+                else:
+                    input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
             elif choice == "4":
-                self.sleep_options()
+                self.sleep_menu()
             elif choice == "5":
-                if self.save_game():
+                if self.game.save():
                     print(f"\n{self.color_text('Game saved!', 'green')}")
                     sys.exit()
             elif choice == "6":
                 confirm = input(self.color_text("Are you sure you want to reset? (y/n): ", "red"))
                 if confirm.lower() == 'y':
-                    self.reset_game()
+                    self.game.new_game()
+                    print(self.color_text("Game reset!", "green"))
+                    time.sleep(1)
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
                 time.sleep(1)
 
-if __name__ == "__main__":
-    game = TerminalFarm()
+# ==================== Inicialização do Jogo ====================
+def main():
+    game_state = GameState()
+    ui = TerminalUI(game_state)
+    
+    # Try to load saved game
+    if not game_state.load():
+        print("Starting new game...")
+        time.sleep(1)
+    
     try:
-        game.main_loop()
+        ui.main_menu()
     except KeyboardInterrupt:
-        game.save_game()
-        print(f"\n{game.color_text('Game saved automatically!', 'green')}")
+        game_state.save()
+        print(f"\nGame saved automatically!")
         sys.exit()
+
+if __name__ == "__main__":
+    main()
