@@ -40,6 +40,24 @@ class TerminalFarm:
             "pumpkin": {"cost": 40, "growth_time": 40, "value": 100, "color": "orange", "stamina_cost": 1}
         }
         
+        # Sistema de missões
+        self.daily_quests = []
+        self.progress_quests = []
+        self.completed_quests = []
+        self.quest_rewards = {
+            "daily": {"money": 50, "stamina": 1},
+            "progress": {"money": 200, "stamina": 2}
+        }
+        
+        # Objetivos de longo prazo
+        self.farm_expansions = {
+            "small": {"cost": 500, "size": 12},
+            "medium": {"cost": 1500, "size": 16},
+            "large": {"cost": 3000, "size": 25}
+        }
+        self.current_farm_size = 9
+        self.unlocked_expansions = []
+        
         if os.path.exists(self.SAVE_FILE):
             self.load_game()
         else:
@@ -54,6 +72,147 @@ class TerminalFarm:
         self.weather = "sunny"
         self.stamina = self.max_stamina
         self.last_sleep_time = datetime.now()
+        self.generate_daily_quests()
+        self.generate_progress_quests()
+    
+    def generate_daily_quests(self):
+        self.daily_quests = []
+        quest_types = [
+            ("Plantar {count} {crop}", "plant"),
+            ("Colher {count} {crop}", "harvest"),
+            ("Ganhar ${amount}", "money")
+        ]
+        
+        for _ in range(3):  # 3 missões diárias
+            quest_type, quest_kind = random.choice(quest_types)
+            if quest_kind in ["plant", "harvest"]:
+                crop = random.choice(self.unlocked_crops)
+                count = random.randint(2, 5)
+                self.daily_quests.append({
+                    "text": quest_type.format(count=count, crop=crop),
+                    "kind": quest_kind,
+                    "crop": crop,
+                    "count": count,
+                    "completed": False
+                })
+            else:
+                amount = random.randint(100, 300)
+                self.daily_quests.append({
+                    "text": quest_type.format(amount=amount),
+                    "kind": quest_kind,
+                    "amount": amount,
+                    "completed": False
+                })
+    
+    def generate_progress_quests(self):
+        self.progress_quests = [
+            {
+                "text": "Expandir fazenda pela primeira vez",
+                "kind": "expansion",
+                "completed": False
+            },
+            {
+                "text": "Desbloquear todas as culturas",
+                "kind": "unlock_all",
+                "completed": False
+            },
+            {
+                "text": "Ter $1000 no banco",
+                "kind": "money",
+                "amount": 1000,
+                "completed": False
+            }
+        ]
+    
+    def count_planted_crops(self, crop_type):
+        return sum(1 for plot in self.farm if plot and plot[0] == crop_type)
+    
+    def count_harvested_crops(self, crop_type):
+        # Esta função precisaria ser implementada para rastrear culturas colhidas
+        return 0  # Placeholder
+    
+    def check_quests(self):
+        # Verificar missões diárias
+        for quest in self.daily_quests:
+            if not quest["completed"]:
+                completed = False
+                if quest["kind"] == "plant":
+                    completed = self.count_planted_crops(quest["crop"]) >= quest["count"]
+                elif quest["kind"] == "harvest":
+                    completed = self.count_harvested_crops(quest["crop"]) >= quest["count"]
+                elif quest["kind"] == "money":
+                    completed = self.money >= quest["amount"]
+                
+                if completed:
+                    quest["completed"] = True
+                    self.money += self.quest_rewards["daily"]["money"]
+                    self.stamina = min(self.max_stamina, self.stamina + self.quest_rewards["daily"]["stamina"])
+                    print(self.color_text(f"\nMissão diária completada: {quest['text']}", "bright_green"))
+                    print(self.color_text(f"Recompensa: ${self.quest_rewards['daily']['money']} e {self.quest_rewards['daily']['stamina']} coração(ões)", "yellow"))
+                    time.sleep(2)
+        
+        # Verificar missões de progresso
+        for quest in self.progress_quests:
+            if not quest["completed"]:
+                completed = False
+                if quest["kind"] == "expansion":
+                    completed = len(self.unlocked_expansions) > 0
+                elif quest["kind"] == "unlock_all":
+                    completed = len(self.unlocked_crops) == len(self.default_crops)
+                elif quest["kind"] == "money":
+                    completed = self.money >= quest["amount"]
+                
+                if completed:
+                    quest["completed"] = True
+                    self.money += self.quest_rewards["progress"]["money"]
+                    self.stamina = min(self.max_stamina, self.stamina + self.quest_rewards["progress"]["stamina"])
+                    print(self.color_text(f"\nMissão de progresso completada: {quest['text']}", "bright_green"))
+                    print(self.color_text(f"Recompensa: ${self.quest_rewards['progress']['money']} e {self.quest_rewards['progress']['stamina']} coração(ões)", "yellow"))
+                    time.sleep(2)
+    
+    def display_quests(self):
+        print(f"\n{self.color_text('Missões Diárias:', 'bright_blue')}")
+        for i, quest in enumerate(self.daily_quests, 1):
+            status = self.color_text("✓", "bright_green") if quest["completed"] else self.color_text("○", "gray")
+            print(f"{self.color_text(f'{i}.', 'cyan')} {status} {quest['text']}")
+        
+        print(f"\n{self.color_text('Missões de Progresso:', 'bright_blue')}")
+        for i, quest in enumerate(self.progress_quests, 1):
+            status = self.color_text("✓", "bright_green") if quest["completed"] else self.color_text("○", "gray")
+            print(f"{self.color_text(f'{i}.', 'cyan')} {status} {quest['text']}")
+    
+    def expand_farm(self):
+        print(f"\n{self.color_text('Expansões Disponíveis:', 'bright_blue')}")
+        for size, info in self.farm_expansions.items():
+            if size not in self.unlocked_expansions:
+                cost = self.color_text(f"${info['cost']}", "yellow")
+                print(f"{self.color_text(f'{size.capitalize()}:', 'cyan')} {cost} - {info['size']} lotes")
+        
+        choice = input(f"\n{self.color_text('Escolha uma expansão para comprar (ou 0 para cancelar):', 'bright_cyan')} ")
+        if choice == "0":
+            return
+        
+        try:
+            size = choice.lower()
+            if size in self.farm_expansions and size not in self.unlocked_expansions:
+                cost = self.farm_expansions[size]["cost"]
+                if self.money >= cost:
+                    self.money -= cost
+                    self.unlocked_expansions.append(size)
+                    new_size = self.farm_expansions[size]["size"]
+                    self.farm.extend([None] * (new_size - len(self.farm)))
+                    self.current_farm_size = new_size
+                    print(self.color_text(f"\nFazenda expandida para {new_size} lotes!", "bright_green"))
+                    time.sleep(1)
+                else:
+                    print(self.color_text("\nDinheiro insuficiente!", "red"))
+                    time.sleep(1)
+            else:
+                print(self.color_text("\nOpção inválida!", "red"))
+                time.sleep(1)
+        except:
+            print(self.color_text("\nOpção inválida!", "red"))
+            time.sleep(1)
     
     def save_game(self):
         try:
@@ -76,7 +235,12 @@ class TerminalFarm:
                 "weather": self.weather,
                 "stamina": self.stamina,
                 "last_sleep_time": self.last_sleep_time.isoformat(),
-                "max_stamina": self.max_stamina
+                "max_stamina": self.max_stamina,
+                "daily_quests": self.daily_quests,
+                "progress_quests": self.progress_quests,
+                "completed_quests": self.completed_quests,
+                "unlocked_expansions": self.unlocked_expansions,
+                "current_farm_size": self.current_farm_size
             }
             
             with open(self.SAVE_FILE, 'w') as f:
@@ -108,6 +272,15 @@ class TerminalFarm:
             self.max_stamina = save_data.get("max_stamina", 5)
             self.last_sleep_time = datetime.fromisoformat(save_data.get("last_sleep_time", datetime.now().isoformat()))
             self.crops = self.default_crops.copy()
+            
+            # Carregar dados das missões
+            self.daily_quests = save_data.get("daily_quests", [])
+            self.progress_quests = save_data.get("progress_quests", [])
+            self.completed_quests = save_data.get("completed_quests", [])
+            
+            # Carregar dados de expansão
+            self.unlocked_expansions = save_data.get("unlocked_expansions", [])
+            self.current_farm_size = save_data.get("current_farm_size", 9)
             
             # Restaurar stamina baseado no tempo passado
             self.restore_stamina_over_time()
@@ -331,6 +504,8 @@ class TerminalFarm:
         self.day += 1
         self.change_weather()
         self.check_unlocks()
+        self.generate_daily_quests()  # Gerar novas missões diárias
+        self.check_quests()  # Verificar missões completadas
         
         if random.random() < 0.2:
             self.random_event()
@@ -409,13 +584,15 @@ class TerminalFarm:
     def main_loop(self):
         while True:
             self.display_farm()
+            self.display_quests()  # Mostrar missões
             print(f"{self.color_text('Actions:', 'bright_blue')}")
             print(f"  {self.color_text('1.', 'cyan')} {self.color_text('Plant Crop', 'bright_green')}")
             print(f"  {self.color_text('2.', 'cyan')} {self.color_text('Harvest Crops', 'yellow')}")
             print(f"  {self.color_text('3.', 'cyan')} {self.color_text('Next Day', 'bright_blue')}")
             print(f"  {self.color_text('4.', 'cyan')} {self.color_text('Sleep/Rest', 'pink')}")
-            print(f"  {self.color_text('5.', 'cyan')} {self.color_text('Save & Quit', 'blue')}")
-            print(f"  {self.color_text('6.', 'cyan')} {self.color_text('Reset Game', 'red')}")
+            print(f"  {self.color_text('5.', 'cyan')} {self.color_text('Expand Farm', 'orange')}")
+            print(f"  {self.color_text('6.', 'cyan')} {self.color_text('Save & Quit', 'blue')}")
+            print(f"  {self.color_text('7.', 'cyan')} {self.color_text('Reset Game', 'red')}")
             
             choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
             
@@ -428,10 +605,12 @@ class TerminalFarm:
             elif choice == "4":
                 self.sleep_options()
             elif choice == "5":
+                self.expand_farm()
+            elif choice == "6":
                 if self.save_game():
                     print(f"\n{self.color_text('Game saved!', 'green')}")
                     sys.exit()
-            elif choice == "6":
+            elif choice == "7":
                 confirm = input(self.color_text("Are you sure you want to reset? (y/n): ", "red"))
                 if confirm.lower() == 'y':
                     self.reset_game()
