@@ -285,9 +285,9 @@ class EventSystem(IGameSystem):
         self.player = player
         self.last_event_day = -1
     
-    def update(self):
-        if random.random() < 0.2 and self.last_event_day != self.farm.game.time_system.day:
-            self.last_event_day = self.farm.game.time_system.day
+    def update(self, current_day: int):
+        if random.random() < 0.8 and self.last_event_day != current_day:
+            self.last_event_day = current_day
             event = random.choice([
                 self._storm_event,
                 self._sunny_bonus_event,
@@ -319,13 +319,13 @@ class GameState(ISerializable):
     def __init__(self):
         self.player = Player()
         self.farm = FarmSystem()
+        self.farm.game = self
         self.crop_system = CropSystem()
         self.weather_system = WeatherSystem()
         self.time_system = TimeSystem()
         self.event_system = EventSystem(self.farm, self.player)
-        
-        self.farm.game = self
         self.event_system.game = self
+        self.day_cycle_system = DayCycleSystem(self.time_system)
     
     def next_day(self) -> Tuple[bool, Optional[str]]:
         """Advance to next day, returns (success, event_message)"""
@@ -335,6 +335,7 @@ class GameState(ISerializable):
         self.player.use_stamina(1.0)
         self.time_system.update()
         self.weather_system.update()
+        self.day_cycle_system = DayCycleSystem(self.time_system)
         
         unlock_message = None
         if self.time_system.day == 3 and 'corn' not in self.crop_system.unlocked_crops:
@@ -342,7 +343,7 @@ class GameState(ISerializable):
         elif self.time_system.day == 7 and 'pumpkin' not in self.crop_system.unlocked_crops:
             unlock_message = self.crop_system.unlock_crop('pumpkin')
         
-        event_message = self.event_system.update()
+        event_message = self.event_system.update(self.time_system.day)
         
         return True, unlock_message or event_message
     
@@ -362,9 +363,8 @@ class GameState(ISerializable):
             
             with open(self.SAVE_FILE, 'r') as f:
                 data = json.load(f)
-                self.from_dict(data)
+                self.from_dict(data, fallback=True)
             
-            # Restore stamina based on time passed
             time_passed = datetime.now() - self.player.last_sleep_time
             hours_passed = time_passed.total_seconds() / 3600
             stamina_to_restore = min(int(hours_passed / 2), 
@@ -386,116 +386,40 @@ class GameState(ISerializable):
             'farm': self.farm.to_dict(),
             'crop_system': self.crop_system.to_dict(),
             'weather_system': self.weather_system.to_dict(),
-            'time_system': self.time_system.to_dict()
+            'time_system': self.time_system.to_dict(),
+            'day_cycle_system': self.day_cycle_system.to_dict()
         }
     
-    def from_dict(self, data: Dict[str, Any]):
+    def from_dict(self, data: Dict[str, Any], fallback: bool = False):
         self.player = Player.from_dict(data['player'])
         self.farm = FarmSystem.from_dict(data['farm'])
+        self.farm.game = self
         self.crop_system = CropSystem.from_dict(data['crop_system'])
         self.weather_system = WeatherSystem.from_dict(data['weather_system'])
         self.time_system = TimeSystem.from_dict(data['time_system'])
+        if 'day_cycle_system' in data:
+            self.day_cycle_system = DayCycleSystem.from_dict(data['day_cycle_system'])
+        elif fallback:
+            self.day_cycle_system = DayCycleSystem(self.time_system)
         self.event_system = EventSystem(self.farm, self.player)
+        self.event_system.game = self
 
 # ==================== Interface do Usuário ====================
 class TerminalUI:
-    COLORS = {
-        "reset": "\033[0m",
-        "green": "\033[32m",
-        "bright_green": "\033[1;32m",
-        "yellow": "\033[33m",
-        "bright_yellow": "\033[1;33m",
-        "blue": "\033[34m",
-        "bright_blue": "\033[1;34m",
-        "cyan": "\033[36m",
-        "bright_cyan": "\033[1;36m",
-        "red": "\033[31m",
-        "bright_red": "\033[1;31m",
-        "orange": "\033[38;5;208m",
-        "gray": "\033[90m",
-        "white": "\033[97m",
-        "pink": "\033[38;5;213m",
-        "heart_red": "\033[38;5;161m"
-    }
-    
-    WEATHER_ICONS = {
-        "sunny": "☀️",
-        "rainy": "🌧️",
-        "cloudy": "☁️",
-        "windy": "🌬️"
-    }
-    
-    def __init__(self, game_state: GameState):
-        self.game = game_state
-    
-    def clear_screen(self):
-        print("\033[H\033[J")
-    
-    def color_text(self, text: str, color: str) -> str:
-        return f"{self.COLORS.get(color, '')}{text}{self.COLORS['reset']}"
-    
-    def display_stamina(self, stamina: float, max_stamina: int) -> str:
-        full_hearts = int(stamina)
-        half_heart = (stamina - full_hearts) >= 0.5
-        empty_hearts = max_stamina - full_hearts - (1 if half_heart else 0)
-        
-        hearts = []
-        hearts.extend([self.color_text("♥", "heart_red")] * full_hearts)
-        if half_heart:
-            hearts.append(self.color_text("♥", "pink"))
-        hearts.extend([self.color_text("♡", "gray")] * empty_hearts)
-        
-        return " ".join(hearts)
-    
-    def get_greeting(self) -> str:
-        hour = datetime.now().hour
-        if 5 <= hour < 12:
-            return "Good morning"
-        elif 12 <= hour < 17:
-            return "Good afternoon"
-        elif 17 <= hour < 21:
-            return "Good evening"
-        else:
-            return "Good night"
-    
-    def display_header(self):
-        import getpass
-        username = getpass.getuser()
-        greeting = self.get_greeting()
-        
-        stamina_display = self.display_stamina(
-            self.game.player.stamina, 
-            self.game.player.max_stamina
-        )
-
-        BOX_WIDTH = 44
-        INNER_WIDTH = BOX_WIDTH - 2 
-        BOX_BORDER_HORIZONTAL = "═" * BOX_WIDTH
-        BOX_TITLE_SPACING = 20 
-        GREETING_PADDING = 39  
-        STAMINA_PADDING = 24  
-
-        header = f"""
-{self.color_text(f'╔{BOX_BORDER_HORIZONTAL}╗', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  {self.color_text('🌱 TERMINAL FARM', 'bright_green')}{' ' * (BOX_TITLE_SPACING - len(str(self.game.time_system.day)))}{self.color_text(f'Day {self.game.time_system.day}', 'yellow')}  {self.color_text('║', 'bright_cyan')}
-{self.color_text(f'╠{BOX_BORDER_HORIZONTAL}╣', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  {self.color_text(f'{greeting}, {username}!', 'green')}{' ' * (GREETING_PADDING - len(greeting) - len(username))}{self.color_text('║', 'bright_cyan')}
-{self.color_text('║', 'bright_cyan')}  Stamina: {stamina_display}{' ' * STAMINA_PADDING}{self.color_text('║', 'bright_cyan')}
-{self.color_text(f'╚{BOX_BORDER_HORIZONTAL}╝', 'bright_cyan')}
-"""
-        print(header)
-    
     def display_status(self):
         weather = self.game.weather_system.get_weather()
         weather_icon = self.WEATHER_ICONS.get(weather, '')
-        
-        status = f"""
-{self.color_text('══════════════════════════════════════════════', 'bright_cyan')}
-{self.color_text('💰 Money:', 'bright_yellow')} {self.color_text(f'${self.game.player.money}', 'yellow')}   {self.color_text('Weather:', 'bright_blue')} {weather_icon} {self.color_text(weather.capitalize(), 'blue')}
-{self.color_text('══════════════════════════════════════════════', 'bright_cyan')}
-"""
-        print(status)
-    
+        money_text = f"💰 Money: ${self.game.player.money}"
+        weather_text = f"Weather: {weather_icon} {weather.capitalize()}"
+
+        header_width = self.last_box_width if hasattr(self, 'last_box_width') else 50
+        content = f"{money_text}   {weather_text}"
+        padding = (header_width - len(self.strip_ansi(content))) // 2
+        padded_content = " " * padding + content
+
+        print(self.color_text('═' * header_width, 'bright_cyan'))
+        print(padded_content)
+        print(self.color_text('═' * header_width, 'bright_cyan'))
     def display_farm(self):
         self.clear_screen()
         self.display_header()
@@ -531,7 +455,120 @@ class TerminalUI:
             print("  ".join(row))
         
         print("\n")
+    COLORS = {
+        "reset": "\033[0m",
+        "green": "\033[32m",
+        "bright_green": "\033[1;32m",
+        "yellow": "\033[33m",
+        "bright_yellow": "\033[1;33m",
+        "blue": "\033[34m",
+        "bright_blue": "\033[1;34m",
+        "cyan": "\033[36m",
+        "bright_cyan": "\033[1;36m",
+        "red": "\033[31m",
+        "bright_red": "\033[1;31m",
+        "orange": "\033[38;5;208m",
+        "gray": "\033[90m",
+        "white": "\033[97m",
+        "pink": "\033[38;5;213m",
+        "heart_red": "\033[38;5;161m"
+    }
     
+    WEATHER_ICONS = {
+        "sunny": "☀️",
+        "rainy": "🌧️",
+        "cloudy": "☁️",
+        "windy": "🌬️"
+    }
+    
+    def __init__(self, game_state: GameState):
+        self.game = game_state
+    
+    def clear_screen(self):
+        print("\033[H\033[J")
+    
+    def color_text(self, text: str, color: str) -> str:
+        return f"{self.COLORS.get(color, '')}{text}{self.COLORS['reset']}"
+
+    def strip_ansi(self, text: str) -> str:
+        import re
+        ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+        return ansi_escape.sub('', text)
+    
+    def display_stamina(self, stamina: float, max_stamina: int) -> str:
+        full_hearts = int(stamina)
+        half_heart = (stamina - full_hearts) >= 0.5
+        empty_hearts = max_stamina - full_hearts - (1 if half_heart else 0)
+        
+        hearts = []
+        hearts.extend([self.color_text("♥", "heart_red")] * full_hearts)
+        if half_heart:
+            hearts.append(self.color_text("♥", "pink"))
+        hearts.extend([self.color_text("♡", "gray")] * empty_hearts)
+        
+        return " ".join(hearts)
+    
+    def get_greeting(self) -> str:
+        hour = datetime.now().hour
+        if 5 <= hour < 12:
+            return "Good morning"
+        elif 12 <= hour < 17:
+            return "Good afternoon"
+        elif 17 <= hour < 21:
+            return "Good evening"
+        else:
+            return "Good night"
+
+    def get_season_icon(self) -> str:
+        icons = {
+            "spring": "🌸",
+            "summer": "☀️",
+            "autumn": "🍂",
+            "winter": "❄️"
+        }
+        return icons.get(self.game.day_cycle_system.get_season(), "")
+    
+    def display_header(self):
+        import getpass
+        username = getpass.getuser()
+        greeting = self.get_greeting()
+        stamina_display = self.display_stamina(self.game.player.stamina, self.game.player.max_stamina)
+        season = self.game.day_cycle_system.get_season().capitalize()
+        current_part = self.game.day_cycle_system.get_current_part().capitalize()
+        season_icon = self.get_season_icon()
+        day = self.game.time_system.day
+
+        TITLE_LINE = f"🌱 TERMINAL FARM - Day {day} ({current_part}) {season_icon} {season}"
+        GREETING_LINE = f"{greeting}, {username}!"
+        STAMINA_LINE = f"Stamina: {stamina_display}"
+
+        raw_title = TITLE_LINE
+        raw_greeting = GREETING_LINE
+        raw_stamina = STAMINA_LINE
+
+        content_width = max(
+            len(raw_title),
+            len(raw_greeting),
+            len(self.strip_ansi(stamina_display)) + len("Stamina: ")
+        ) + 6
+        BOX_WIDTH = content_width
+        BOX_BORDER_HORIZONTAL = "═" * BOX_WIDTH
+
+        centered_title = raw_title.center(BOX_WIDTH - 4)
+        title_line = f"{self.color_text('║', 'bright_cyan')}{self.color_text(centered_title.center(BOX_WIDTH - 2), 'bright_green')}{self.color_text('║', 'bright_cyan')}"
+        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(raw_greeting.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
+        stamina_text = f"Stamina: {stamina_display}"
+        padding = (BOX_WIDTH - 4) - len(self.strip_ansi(stamina_text))
+        stamina_line = f"{self.color_text('║', 'bright_cyan')}  {stamina_text}{' ' * padding}  {self.color_text('║', 'bright_cyan')}"
+
+        print(self.color_text(f'╔{BOX_BORDER_HORIZONTAL}╗', 'bright_cyan'))
+        print(title_line)
+        print(self.color_text(f'╠{BOX_BORDER_HORIZONTAL}╣', 'bright_cyan'))
+        print(greeting_line)
+        print(stamina_line)
+        self.last_box_width = BOX_WIDTH
+        print(self.color_text(f'╚{BOX_BORDER_HORIZONTAL}╝', 'bright_cyan'))
+
     def plant_crop_menu(self):
         self.display_farm()
         unlocked_crops = self.game.crop_system.get_unlocked_crops()
@@ -585,7 +622,7 @@ class TerminalUI:
         except (ValueError, IndexError):
             input(f"{self.color_text('Invalid choice!', 'red')} Press Enter...")
             return
-    
+
     def harvest_menu(self):
         if not self.game.player.has_stamina(0.5):
             input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
@@ -600,7 +637,7 @@ class TerminalUI:
         else:
             print(f"{self.color_text('Nothing ready to harvest yet!', 'yellow')}")
         time.sleep(1)
-    
+
     def sleep_menu(self):
         self.clear_screen()
         print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
@@ -623,8 +660,8 @@ class TerminalUI:
             self.game.player.last_sleep_time = datetime.now()
             print(self.color_text("\nYou took a refreshing nap and recovered 1 heart!", "green"))
             time.sleep(1)
-    
-    def main_menu(self):
+
+    def start_game_loop(self):
         while True:
             self.display_farm()
             print(f"{self.color_text('Actions:', 'bright_blue')}")
@@ -666,19 +703,70 @@ class TerminalUI:
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
                 time.sleep(1)
+# ==================== Ciclo do Dia ====================
+class DayCycleSystem(ISerializable):
+    PARTS = ["morning", "afternoon", "evening"]
+
+    def __init__(self, time_system: TimeSystem):
+        self.time_system = time_system
+        self.current_part_index = 0
+        self.last_update_time = datetime.now()
+        self.durations = self.get_durations_for_current_season()
+
+    def get_season(self) -> str:
+        season_index = (self.time_system.day - 1) // 30 % 4
+        return ["spring", "summer", "autumn", "winter"][season_index]
+
+    def get_durations_for_current_season(self) -> Dict[str, int]:
+        season = self.get_season()
+        if season == "summer":
+            return {"morning": 4, "afternoon": 4, "evening": 2}
+        elif season == "winter":
+            return {"morning": 3, "afternoon": 3, "evening": 4}
+        else:
+            return {"morning": 3, "afternoon": 3, "evening": 3}
+
+    def update(self):
+        now = datetime.now()
+        current_part = self.PARTS[self.current_part_index]
+        duration_minutes = self.durations[current_part]
+
+        if (now - self.last_update_time).total_seconds() >= duration_minutes * 60:
+            self.current_part_index = (self.current_part_index + 1) % len(self.PARTS)
+            self.last_update_time = now
+            self.durations = self.get_durations_for_current_season()
+            return f"Part of the day changed: {self.get_current_part().capitalize()}!"
+        return None
+
+    def get_current_part(self) -> str:
+        return self.PARTS[self.current_part_index]
+
+    def to_dict(self):
+        return {
+            'current_part_index': self.current_part_index,
+            'last_update_time': self.last_update_time.isoformat()
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        instance = cls(TimeSystem())
+        instance.current_part_index = data['current_part_index']
+        instance.last_update_time = datetime.fromisoformat(data['last_update_time'])
+        return instance
+
 
 # ==================== Inicialização do Jogo ====================
 def main():
     game_state = GameState()
     ui = TerminalUI(game_state)
     
-    # Try to load saved game
     if not game_state.load():
         print("Starting new game...")
         time.sleep(1)
     
     try:
-        ui.main_menu()
+        print(">>> VERIFICANDO: start_game_loop existe")
+        ui.start_game_loop()
     except KeyboardInterrupt:
         game_state.save()
         print(f"\nGame saved automatically!")
