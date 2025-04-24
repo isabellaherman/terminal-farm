@@ -414,11 +414,10 @@ class TerminalUI:
 
         header_width = self.last_box_width if hasattr(self, 'last_box_width') else 50
         content = f"{money_text}   {weather_text}"
-        padding = (header_width - len(self.strip_ansi(content))) // 2
-        padded_content = " " * padding + content
+        
 
         print(self.color_text('═' * header_width, 'bright_cyan'))
-        print(padded_content)
+        print(content)
         print(self.color_text('═' * header_width, 'bright_cyan'))
     def display_farm(self):
         self.clear_screen()
@@ -451,6 +450,7 @@ class TerminalUI:
     COLORS = {
         "reset": "\033[0m",
         "green": "\033[32m",
+        
         "bright_green": "\033[1;32m",
         "yellow": "\033[33m",
         "bright_yellow": "\033[1;33m",
@@ -675,13 +675,13 @@ class TerminalUI:
     def start_game_loop(self):
         while True:
             self.display_farm()
-            print(f"{self.color_text('Actions:', 'bright_blue')}")
-            print(f"  {self.color_text('1.', 'cyan')} {self.color_text('Plant Crop', 'bright_green')}")
-            print(f"  {self.color_text('2.', 'cyan')} {self.color_text('Harvest Crops', 'yellow')}")
-            print(f"  {self.color_text('3.', 'cyan')} {self.color_text('Next Day', 'bright_blue')}")
-            print(f"  {self.color_text('4.', 'cyan')} {self.color_text('Sleep/Rest', 'pink')}")
-            print(f"  {self.color_text('5.', 'cyan')} {self.color_text('Save & Quit', 'blue')}")
-            print(f"  {self.color_text('6.', 'cyan')} {self.color_text('Reset Game', 'red')}")
+            print(f"{self.color_text('Actions:', 'bright_blue')}\n")
+            print(f"  {self.color_text('1.', 'cyan')} {self.color_text('Plant Crop', 'bright_green')}     "
+                  f"{self.color_text('2.', 'cyan')} {self.color_text('Harvest Crops', 'grey')}     "
+                  f"{self.color_text('3.', 'cyan')} {self.color_text('Next Day', 'grey')}")
+            print(f"  {self.color_text('4.', 'cyan')} {self.color_text('Sleep/Rest', 'grey')}     "
+                  f"{self.color_text('5.', 'cyan')} {self.color_text('Save & Quit', 'grey')}     "
+                  f"{self.color_text('6.', 'cyan')} {self.color_text('Reset Game', 'red')}")
             
             choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
             
