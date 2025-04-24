@@ -424,37 +424,30 @@ class TerminalUI:
         self.clear_screen()
         self.display_header()
         self.display_status()
-        
+
         print(f"{self.color_text('🌱 Farm Layout:', 'bright_green')}\n")
-        
+
         for i in range(0, 9, 3):
-            row = []
+            row_lines = ["", "", ""]
             for j in range(3):
                 plot_idx = i + j
                 crop, progress = self.game.farm.get_plot_status(plot_idx)
-                
+
                 if crop:
-                    growth_percent = int(progress * 100)
-                    
-                    if growth_percent < 33:
-                        growth_color = "red"
-                    elif growth_percent < 66:
-                        growth_color = "yellow"
-                    else:
-                        growth_color = "green"
-                    
-                    if growth_percent < 100:
-                        display_text = f"{self.color_text(crop.name[0].upper(), crop.color)}:{self.color_text(f'{growth_percent}%', growth_color)}"
-                    else:
-                        display_text = f"{self.color_text(crop.name[0].upper(), crop.color)}:{self.color_text('READY!', 'bright_green')}"
+                    bg_color = "green" if progress >= 1.0 else "yellow_pastel"
                 else:
-                    display_text = self.color_text("[Empty]", "gray")
-                
-                row.append(display_text)
-            
-            print("  ".join(row))
-        
-        print("\n")
+                    bg_color = "orange"
+                slot_text = str(plot_idx + 1).center(9)
+                content_text = crop.name[:7].center(9) if crop else "Empty".center(9)
+                spacer = " "
+
+                row_lines[0] += self.bg_color_text(slot_text, "white", bg_color) + spacer
+                row_lines[1] += self.bg_color_text(content_text, "white", bg_color) + spacer
+                row_lines[2] += self.bg_color_text(" " * 9, "white", bg_color) + spacer
+
+            for line in row_lines:
+                print(line)
+            print()
     COLORS = {
         "reset": "\033[0m",
         "green": "\033[32m",
@@ -473,6 +466,19 @@ class TerminalUI:
         "pink": "\033[38;5;213m",
         "heart_red": "\033[38;5;161m"
     }
+    # ==================== Cores de Fundo ====================
+    BG_COLORS = {
+        "reset": "\033[0m",
+        "orange": "\033[48;5;94m",
+        "yellow_pastel": "\033[48;5;187m",
+        "gray": "\033[48;5;240m",
+        "green": "\033[42m"
+    }
+
+    def bg_color_text(self, text: str, fg_color: str, bg_color: str) -> str:
+        fg = self.COLORS.get(fg_color, "")
+        bg = self.BG_COLORS.get(bg_color, "")
+        return f"{bg}{fg}{text}{self.COLORS['reset']}"
     
     WEATHER_ICONS = {
         "sunny": "☀️",
@@ -538,24 +544,29 @@ class TerminalUI:
         season_icon = self.get_season_icon()
         day = self.game.time_system.day
 
-        TITLE_LINE = f"🌱 TERMINAL FARM - Day {day} ({current_part}) {season_icon} {season}"
+        TITLE_LINE_LEFT = "🌱 TERMINAL FARM"
+        TITLE_LINE_RIGHT = f"Day {day} ({current_part}) {season_icon} {season}"
         GREETING_LINE = f"{greeting}, {username}!"
         STAMINA_LINE = f"Stamina: {stamina_display}"
 
-        raw_title = TITLE_LINE
+        raw_title_left = TITLE_LINE_LEFT
+        raw_title_right = TITLE_LINE_RIGHT
         raw_greeting = GREETING_LINE
         raw_stamina = STAMINA_LINE
 
         content_width = max(
-            len(raw_title),
+            len(TITLE_LINE_LEFT) + len(TITLE_LINE_RIGHT) + 2,
             len(raw_greeting),
             len(self.strip_ansi(stamina_display)) + len("Stamina: ")
         ) + 6
         BOX_WIDTH = content_width
         BOX_BORDER_HORIZONTAL = "═" * BOX_WIDTH
 
-        centered_title = raw_title.center(BOX_WIDTH - 4)
-        title_line = f"{self.color_text('║', 'bright_cyan')}{self.color_text(centered_title.center(BOX_WIDTH - 2), 'bright_green')}{self.color_text('║', 'bright_cyan')}"
+        spacing = BOX_WIDTH - len(TITLE_LINE_LEFT) - len(TITLE_LINE_RIGHT) - 2
+        TITLE_LINE = f"{TITLE_LINE_LEFT}{' ' * spacing}{TITLE_LINE_RIGHT}"
+
+        centered_title = TITLE_LINE
+        title_line = f"{self.color_text('║', 'bright_cyan')}{self.color_text(centered_title.ljust(BOX_WIDTH - 2), 'bright_green')}{self.color_text('║', 'bright_cyan')}"
         greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(raw_greeting.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
         stamina_text = f"Stamina: {stamina_display}"
         padding = (BOX_WIDTH - 4) - len(self.strip_ansi(stamina_text))
