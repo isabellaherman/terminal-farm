@@ -208,7 +208,10 @@ class CropSystem(ISerializable):
         return {
             'wheat': Crop('wheat', 10, 10, 20, 'yellow', 0.5),
             'corn': Crop('corn', 20, 20, 45, 'bright_yellow', 0.5),
-            'pumpkin': Crop('pumpkin', 40, 40, 100, 'orange', 1.0)
+            'pumpkin': Crop('pumpkin', 40, 40, 100, 'orange', 1.0),
+            'carrot': Crop('carrot', 15, 12, 25, 'orange', 0.5),
+            'eggplant': Crop('eggplant', 35, 30, 70, 'purple', 1.0),
+            'blueberry': Crop('blueberry', 60, 35, 90, 'blue', 1.0),
         }
     
     def get_crop(self, name: str) -> Optional[Crop]:
@@ -286,7 +289,10 @@ class EventSystem(IGameSystem):
         self.last_event_day = -1
     
     def update(self, current_day: int):
-        if random.random() < 0.8 and self.last_event_day != current_day:
+        base_chance = 0.4
+        if hasattr(self.player, "event_bonus") and self.player.event_bonus == "lucky_egg":
+            base_chance = 0.8
+        if random.random() < base_chance and self.last_event_day != current_day:
             self.last_event_day = current_day
             event = random.choice([
                 self._storm_event,
@@ -312,6 +318,108 @@ class EventSystem(IGameSystem):
         self.player.restore_stamina(1)
         return "You found an energy drink! (+1 heart)"
 
+
+# ==================== Sistema do Mercador ====================
+class MerchantSystem:
+    def __init__(self, crop_system: CropSystem, player: Player):
+        self.crop_system = crop_system
+        self.player = player
+        self.fishing_unlocked = False
+
+        self.inventory = {
+            "seeds": {
+                "eggplant_seed": {"crop": "eggplant", "price": 80},
+                "blueberry_seed": {"crop": "blueberry", "price": 120}
+            },
+            "items": {
+                "fishing_rod": {"price": 6666, "unlocks": "fishing"},
+                "golden_hat": {"price": 3333, "effect": "cosmetic", "narrative": True},
+                "lucky_egg": {"price": 5000, "effect": "increase_event_chance"},
+                "balatro_card": {"price": 7777, "effect": "increase_max_stamina"},
+                "lantern": {"price": 5000, "effect": "unlock_night_work"}
+            }
+        }
+
+    def is_available(self, part_of_day: str) -> bool:
+        return part_of_day == "morning"
+
+    def buy_seed(self, seed_key: str) -> Optional[str]:
+        if seed_key not in self.inventory["seeds"]:
+            return "Invalid seed."
+
+        seed = self.inventory["seeds"][seed_key]
+        if not self.player.can_afford(seed["price"]):
+            return "Not enough money."
+
+        self.player.spend_money(seed["price"])
+        result = self.crop_system.unlock_crop(seed["crop"])
+        return result or f"{seed['crop'].capitalize()} is already unlocked."
+
+    def buy_item(self, item_key: str) -> Optional[str]:
+        if item_key not in self.inventory["items"]:
+            return "Invalid item."
+
+        item = self.inventory["items"][item_key]
+
+        if item.get("unlocks") == "fishing" and self.fishing_unlocked:
+            return "You already own this item."
+        if item.get("effect") == "increase_event_chance" and hasattr(self.player, "event_bonus") and self.player.event_bonus == "lucky_egg":
+            return "You already own this item."
+        if item.get("effect") == "increase_max_stamina" and self.player.max_stamina > 5:
+            return "You already own this item."
+        if item.get("effect") == "cosmetic" and hasattr(self.player, "bought_hat") and self.player.bought_hat:
+            return "You already own this item."
+        if item.get("effect") == "unlock_night_work" and getattr(self.player, "has_lantern", False):
+            return "You already own this item."
+
+        if not self.player.can_afford(item["price"]):
+            return "Not enough money."
+
+        self.player.spend_money(item["price"])
+        if item.get("unlocks") == "fishing":
+            self.fishing_unlocked = True
+            return "You bought a fishing rod! Fishing is now available."
+        elif item.get("effect") == "increase_event_chance":
+            self.player.event_bonus = "lucky_egg"
+            return "You feel luckier already... (+Event Chance)"
+        elif item.get("effect") == "increase_max_stamina":
+            self.player.max_stamina += 4
+            self.player.stamina = self.player.max_stamina
+            return "Your soul feels stronger... (+4 Max Stamina)"
+        elif item.get("effect") == "cosmetic":
+            self.player.bought_hat = True
+            return "Cosmetic item? In a CLI game? Bro... you deserved to lose that money. I'm sorry."
+        elif item.get("effect") == "unlock_night_work":
+            self.player.has_lantern = True
+            return "You bought a lantern! Now you can work through the night."
+        return "Item purchased."
+
+class FishingSystem:
+    def __init__(self, player: Player):
+        self.player = player
+        self.caught_fish = []
+
+        self.fish_types = [
+            {"name": "Salmon", "value": 40},
+            {"name": "Tuna", "value": 50},
+            {"name": "Golden Fish", "value": 100}
+        ]
+
+    def fish(self) -> str:
+        if not self.player.has_stamina(2.0):
+            return "Not enough stamina to fish."
+
+        self.player.use_stamina(2.0)
+        fish = random.choice(self.fish_types)
+        self.caught_fish.append(fish)
+        return f"You caught a {fish['name']} worth ${fish['value']}!"
+
+    def sell_all_fish(self) -> str:
+        total = sum(f["value"] for f in self.caught_fish)
+        self.player.earn_money(total)
+        self.caught_fish = []
+        return f"Sold all fish for ${total}!"
+
 # ==================== Gerenciamento do Jogo ====================
 class GameState(ISerializable):
     SAVE_FILE = "terminal_farmer_save.json"
@@ -326,6 +434,8 @@ class GameState(ISerializable):
         self.event_system = EventSystem(self.farm, self.player)
         self.event_system.game = self
         self.day_cycle_system = DayCycleSystem(self.time_system)
+        self.merchant_system = MerchantSystem(self.crop_system, self.player)
+        self.fishing_system = FishingSystem(self.player)
     
     def next_day(self) -> Tuple[bool, Optional[str]]:
         """Advance to next day, returns (success, event_message)"""
@@ -387,7 +497,8 @@ class GameState(ISerializable):
             'crop_system': self.crop_system.to_dict(),
             'weather_system': self.weather_system.to_dict(),
             'time_system': self.time_system.to_dict(),
-            'day_cycle_system': self.day_cycle_system.to_dict()
+            'day_cycle_system': self.day_cycle_system.to_dict(),
+            'merchant': {'fishing_unlocked': self.merchant_system.fishing_unlocked},
         }
     
     def from_dict(self, data: Dict[str, Any], fallback: bool = False):
@@ -403,6 +514,10 @@ class GameState(ISerializable):
             self.day_cycle_system = DayCycleSystem(self.time_system)
         self.event_system = EventSystem(self.farm, self.player)
         self.event_system.game = self
+        self.merchant_system = MerchantSystem(self.crop_system, self.player)
+        self.fishing_system = FishingSystem(self.player)
+        if 'merchant' in data and data['merchant'].get('fishing_unlocked'):
+            self.merchant_system.fishing_unlocked = True
 
 # ==================== Interface do Usuário ====================
 class TerminalUI:
@@ -434,15 +549,17 @@ class TerminalUI:
 
                 if crop:
                     bg_color = "green" if progress >= 1.0 else "yellow_pastel"
+                    fg_color = "white" if progress >= 1.0 else "gray"
                 else:
                     bg_color = "orange"
+                    fg_color = "white"
                 slot_text = str(plot_idx + 1).center(9)
                 content_text = crop.name[:7].center(9) if crop else "Empty".center(9)
                 spacer = " "
 
-                row_lines[0] += self.bg_color_text(slot_text, "white", bg_color) + spacer
-                row_lines[1] += self.bg_color_text(content_text, "white", bg_color) + spacer
-                row_lines[2] += self.bg_color_text(" " * 9, "white", bg_color) + spacer
+                row_lines[0] += self.bg_color_text(slot_text, fg_color, bg_color) + spacer
+                row_lines[1] += self.bg_color_text(content_text, fg_color, bg_color) + spacer
+                row_lines[2] += self.bg_color_text(" " * 9, fg_color, bg_color) + spacer
 
             for line in row_lines:
                 print(line)
@@ -466,13 +583,14 @@ class TerminalUI:
         "pink": "\033[38;5;213m",
         "heart_red": "\033[38;5;161m"
     }
-    # ==================== Cores de Fundo ====================
+    
     BG_COLORS = {
         "reset": "\033[0m",
         "orange": "\033[48;5;94m",
         "yellow_pastel": "\033[48;5;187m",
         "gray": "\033[48;5;240m",
-        "green": "\033[42m"
+        "green": "\033[42m",
+        "green_custom": "\033[48;5;115m",
     }
 
     def bg_color_text(self, text: str, fg_color: str, bg_color: str) -> str:
@@ -535,6 +653,9 @@ class TerminalUI:
         return icons.get(self.game.day_cycle_system.get_season(), "")
     
     def display_header(self):
+        message = self.game.day_cycle_system.update()
+        if message:
+            print(self.color_text(message, "bright_cyan"))
         import getpass
         username = getpass.getuser()
         greeting = self.get_greeting()
@@ -653,11 +774,15 @@ class TerminalUI:
         self.clear_screen()
         print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
         print(f"1. {self.color_text('Sleep until next day', 'cyan')} (Recover all hearts)")
-        print(f"2. {self.color_text('Take a nap (2 hours)', 'cyan')} (Recover 1 heart)")
+        print(f"2. {self.color_text('Take a nap (advance time)', 'cyan')} (Recover 1 heart)")
         print(f"3. {self.color_text('Cancel', 'red')}")
         
         choice = input("\nChoose option: ")
         if choice == "1":
+            if self.game.day_cycle_system.get_current_part() != "night":
+                print(self.color_text("\nYou can only sleep at night… try taking a nap.", "red"))
+                time.sleep(2)
+                return
             success, message = self.game.next_day()
             self.game.player.full_restore()
             self.game.player.last_sleep_time = datetime.now()
@@ -668,26 +793,59 @@ class TerminalUI:
             time.sleep(2)
         elif choice == "2":
             self.game.player.restore_stamina(1)
-            self.game.player.last_sleep_time = datetime.now()
-            print(self.color_text("\nYou took a refreshing nap and recovered 1 heart!", "green"))
-            time.sleep(1)
+            
+            self.game.day_cycle_system.current_part_index = (self.game.day_cycle_system.current_part_index + 1) % len(self.game.day_cycle_system.PARTS)
+            self.game.day_cycle_system.last_update_time = datetime.now()
+            print(self.color_text("\nYou took a nap and time passed... (+1 heart)", "green"))
+            time.sleep(2)
 
     def start_game_loop(self):
         while True:
             self.display_farm()
-            print(f"{self.color_text('Actions:', 'bright_blue')}\n")
-            print(f"  {self.color_text('1.', 'cyan')} {self.color_text('Plant Crop', 'bright_green')}     "
-                  f"{self.color_text('2.', 'cyan')} {self.color_text('Harvest Crops', 'grey')}     "
-                  f"{self.color_text('3.', 'cyan')} {self.color_text('Next Day', 'grey')}")
-            print(f"  {self.color_text('4.', 'cyan')} {self.color_text('Sleep/Rest', 'grey')}     "
-                  f"{self.color_text('5.', 'cyan')} {self.color_text('Save & Quit', 'grey')}     "
-                  f"{self.color_text('6.', 'cyan')} {self.color_text('Reset Game', 'red')}")
+            print(self.color_text("Actions:", "bright_blue"))
+
+            actions = []
+            actions.append(f"{self.color_text('1.', 'cyan')} {self.color_text('Plant Crop', 'bright_green')}")
+            actions.append(f"{self.color_text('2.', 'cyan')} {self.color_text('Harvest Crops', 'grey')}")
+            actions.append(f"{self.color_text('3.', 'cyan')} {self.color_text('Next Day', 'grey')}")
+            actions.append(f"{self.color_text('4.', 'cyan')} {self.color_text('Sleep/Rest', 'grey')}")
+            actions.append(f"{self.color_text('5.', 'cyan')} {self.color_text('Save & Quit', 'grey')}")
+            actions.append(f"{self.color_text('6.', 'cyan')} {self.color_text('Reset Game', 'red')}")
+
+            if self.game.merchant_system.is_available(self.game.day_cycle_system.get_current_part()):
+                actions.append(f"{self.color_text('7.', 'cyan')} {self.color_text('Joji the Merchant', 'bright_yellow')}")
+            if self.game.merchant_system.fishing_unlocked:
+                actions.append(f"{self.color_text('8.', 'cyan')} {self.color_text('Go Fishing', 'grey')}")
+
             
+            max_widths = [0, 0, 0]
+            for i, action in enumerate(actions):
+                col = i % 3
+                length = len(self.strip_ansi(action))
+                if length > max_widths[col]:
+                    max_widths[col] = length
+
+            for i in range(0, len(actions), 3):
+                row = actions[i:i+3]
+                padded_row = []
+                for j, action in enumerate(row):
+                    col_width = max_widths[j]
+                    raw = self.strip_ansi(action)
+                    pad = col_width - len(raw)
+                    padded_row.append(action + (" " * pad))
+                print(" | ".join(padded_row))
+
             choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
             
             if choice == "1":
+                if self.game.day_cycle_system.get_current_part() == "night" and not getattr(self.game.player, "has_lantern", False):
+                    input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
+                    continue
                 self.plant_crop_menu()
             elif choice == "2":
+                if self.game.day_cycle_system.get_current_part() == "night" and not getattr(self.game.player, "has_lantern", False):
+                    input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
+                    continue
                 self.harvest_menu()
             elif choice == "3":
                 success, message = self.game.next_day()
@@ -711,12 +869,111 @@ class TerminalUI:
                     self.game.new_game()
                     print(self.color_text("Game reset!", "green"))
                     time.sleep(1)
+            elif choice == "7" and self.game.merchant_system.is_available(self.game.day_cycle_system.get_current_part()):
+                self.merchant_menu()
+            elif choice == "8" and self.game.merchant_system.fishing_unlocked:
+                if self.game.day_cycle_system.get_current_part() == "night" and not getattr(self.game.player, "has_lantern", False):
+                    input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
+                    continue
+                self.fishing_menu()
+            elif choice.lower() == "blackpink":
+                self.game.player.earn_money(10000)
+                print(self.color_text("BLACKPINK IN YOUR FARM 💸 +$10,000!", "bright_magenta"))
+                time.sleep(1)
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
                 time.sleep(1)
+
+    def merchant_menu(self):
+        self.clear_screen()
+        print(self.color_text("🧙‍♂️ Joji, the Morning Merchant", "bright_yellow"))
+        print(self.color_text("═" * 40, "bright_cyan"))
+        print(self.color_text("Welcome! Take a look at my goods:", "white"))
+        print()
+
+        print(self.color_text("🌱 Seeds:", "bright_blue"))
+        for key, seed in self.game.merchant_system.inventory["seeds"].items():
+            already_unlocked = seed["crop"] in self.game.crop_system.unlocked_crops
+            item_name = self.color_text(key, "gray" if already_unlocked else "cyan")
+            unlock = self.color_text(f"(Unlocks {seed['crop'].capitalize()})", "grey")
+            print(f" - {item_name}: ${seed['price']} {unlock}")
+
+        print()
+        print(self.color_text("🎁 Items:", "bright_blue"))
+        for key, item in self.game.merchant_system.inventory["items"].items():
+            already_owned = False
+            if item.get("unlocks") == "fishing" and self.game.merchant_system.fishing_unlocked:
+                already_owned = True
+            elif item.get("effect") == "increase_event_chance" and hasattr(self.game.player, "event_bonus") and self.game.player.event_bonus == "lucky_egg":
+                already_owned = True
+            elif item.get("effect") == "increase_max_stamina" and self.game.player.max_stamina > 5:
+                already_owned = True
+            elif item.get("effect") == "cosmetic":
+                already_owned = hasattr(self.game.player, "bought_hat") and self.game.player.bought_hat
+
+            item_name = self.color_text(key, "gray" if already_owned else "cyan")
+            if "unlocks" in item:
+                detail = self.color_text(f"(Unlocks {item['unlocks'].capitalize()})", "grey")
+            elif "effect" in item:
+                readable_effects = {
+                    "cosmetic": "Visual cosmetic item",
+                    "increase_event_chance": "Boosts daily events: 80% chance to occur each day!",
+                    "increase_max_stamina": "Double your max stamina",
+                    "unlock_night_work": "Allow you to work at night"
+                }
+                effect_description = readable_effects.get(item.get("effect", ""), "")
+                detail = self.color_text(f"({effect_description})", "grey") if effect_description else ""
+            else:
+                detail = ""
+            print(f" - {item_name}: ${item['price']} {detail}")
+
+        choice = input("\nWhat would you like to buy? (type item key or '0' to cancel): ").strip()
+        if choice == "0":
+            return
+        narrative = False
+        item = None
+        if choice in self.game.merchant_system.inventory["seeds"]:
+            msg = self.game.merchant_system.buy_seed(choice)
+        elif choice in self.game.merchant_system.inventory["items"]:
+            item = self.game.merchant_system.inventory["items"][choice]
+            narrative = item.get("narrative", False)
+            msg = self.game.merchant_system.buy_item(choice)
+        else:
+            msg = "Invalid option."
+
+        error_keywords = ["invalid", "not enough"]
+        is_error = msg is None or any(kw in msg.lower() for kw in error_keywords)
+
+        if is_error:
+            print(self.color_text(msg, "red"))
+            time.sleep(2)
+        elif narrative:
+            print(self.color_text(msg, "green"))
+            input(self.color_text("\n(Press Enter to continue)", "white"))
+        else:
+            print(self.color_text(msg, "green"))
+            time.sleep(2)
+
+    def fishing_menu(self):
+        self.clear_screen()
+        print(self.color_text("🎣 Fishing Spot", "bright_blue"))
+        print("1. Go fishing (-2♥)")
+        print("2. Sell all fish")
+        print("3. Back")
+
+        choice = input("\nChoose an option: ").strip()
+        if choice == "1":
+            result = self.game.fishing_system.fish()
+        elif choice == "2":
+            result = self.game.fishing_system.sell_all_fish()
+        else:
+            return
+
+        print(self.color_text(result, "green"))
+        time.sleep(2)
 # ==================== Ciclo do Dia ====================
 class DayCycleSystem(ISerializable):
-    PARTS = ["morning", "afternoon", "evening"]
+    PARTS = ["morning", "afternoon", "evening", "night"]
 
     def __init__(self, time_system: TimeSystem):
         self.time_system = time_system
@@ -730,12 +987,13 @@ class DayCycleSystem(ISerializable):
 
     def get_durations_for_current_season(self) -> Dict[str, int]:
         season = self.get_season()
+        
         if season == "summer":
-            return {"morning": 4, "afternoon": 4, "evening": 2}
+            return {"morning": 4, "afternoon": 4, "evening": 2, "night": 3}
         elif season == "winter":
-            return {"morning": 3, "afternoon": 3, "evening": 4}
+            return {"morning": 3, "afternoon": 3, "evening": 4, "night": 3}
         else:
-            return {"morning": 3, "afternoon": 3, "evening": 3}
+            return {"morning": 3, "afternoon": 3, "evening": 3, "night": 3}
 
     def update(self):
         now = datetime.now()
