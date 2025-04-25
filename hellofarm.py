@@ -297,7 +297,7 @@ class EventSystem(IGameSystem):
         self.last_event_day = -1
     
     def update(self, current_day: int):
-        base_chance = 1.0
+        base_chance = 0.4
         if random.random() < base_chance and self.last_event_day != current_day:
             self.last_event_day = current_day
             event = random.choice([
