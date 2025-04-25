@@ -212,6 +212,7 @@ class CropSystem(ISerializable):
             'carrot': Crop('carrot', 15, 12, 25, 'orange', 0.5),
             'eggplant': Crop('eggplant', 35, 30, 70, 'purple', 1.0),
             'blueberry': Crop('blueberry', 60, 35, 90, 'blue', 1.0),
+            'lazy_ghost': Crop('lazy ghost seed [rare]', 0, 30, 100, 'white', 0),
         }
     
     def get_crop(self, name: str) -> Optional[Crop]:
@@ -289,19 +290,36 @@ class EventSystem(IGameSystem):
         self.last_event_day = -1
     
     def update(self, current_day: int):
-        base_chance = 0.4
-        if hasattr(self.player, "event_bonus") and self.player.event_bonus == "lucky_egg":
-            base_chance = 0.8
+        base_chance = 1.0  # 100% chance for testing purposes
         if random.random() < base_chance and self.last_event_day != current_day:
             self.last_event_day = current_day
             event = random.choice([
                 self._storm_event,
                 self._sunny_bonus_event,
                 self._found_money_event,
-                self._found_energy_event
+                self._found_energy_event,
+                self._fish_rain_event,
+                self._plague_event,
+                self._spirit_farmer_event,
+                self._lazy_day_event,
+                self._starry_night_event,
+                self._inflated_market_event,
+                self._night_robbery_event,
+                self._perfect_fishing_day_event,
+                self._rich_farmer_patron_event,
+                self._sugar_daddy_marriage_event
             ])
             return event()
         return None
+    def _rich_farmer_patron_event(self):
+        amount = 500
+        self.player.earn_money(amount)
+        return "Your charm paid off. A rich old farmer who just loves your crops appears. 💖 (+$500)"
+
+    def _sugar_daddy_marriage_event(self):
+        amount = 3000
+        self.player.earn_money(amount)
+        return "Farm life is tough… unless you marry rich! 💍 (+$3,000)"
     
     def _storm_event(self):
         return self.farm.damage_random_crop()
@@ -318,6 +336,56 @@ class EventSystem(IGameSystem):
         self.player.restore_stamina(1)
         return "You found an energy drink! (+1 heart)"
 
+    def _fish_rain_event(self):
+        if hasattr(self, "game") and hasattr(self.game, "fishing_system"):
+            self.game.fishing_system.caught_fish.append({"name": "Skyfish", "value": 150})
+            return "A mysterious rain dropped a Skyfish into your bucket! (+$150)"
+        return None
+
+    def _plague_event(self):
+        damaged = 0
+        for _ in range(2):
+            result = self.farm.damage_random_crop()
+            if result:
+                damaged += 1
+        if damaged:
+            return "A mysterious plague destroyed some crops!"
+        return None
+
+    def _spirit_farmer_event(self):
+        if hasattr(self, "game") and hasattr(self.game, "crop_system"):
+            if "lazy_ghost" not in self.game.crop_system.unlocked_crops:
+                self.game.crop_system.unlocked_crops.append("lazy_ghost")
+        return "A benevolent spirit gifted you a Lazy Ghost Seed!"
+
+    def _lazy_day_event(self):
+        if self.player.max_stamina > 1:
+            self.player.max_stamina -= 2
+            if self.player.stamina > self.player.max_stamina:
+                self.player.stamina = self.player.max_stamina
+            if hasattr(self, "game"):
+                self.game.lazy_day_active = True
+            return "You feel extremely lazy today... (-2 Max Hearts)"
+        return None
+
+    def _starry_night_event(self):
+        return self.farm.apply_growth_bonus(100)
+
+    def _inflated_market_event(self):
+        if hasattr(self, "game"):
+            self.game.market_inflated = True
+        return "Prices have doubled today! (Inflated Market)"
+
+    def _night_robbery_event(self):
+        stolen = min(100, self.player.money)
+        self.player.spend_money(stolen)
+        return f"Thieves stole ${stolen} from your farm during the night!"
+
+    def _perfect_fishing_day_event(self):
+        if hasattr(self, "game"):
+            self.game.fishing_bonus = True
+        return "The fish are biting! (+50% fish value today!)"
+
 
 # ==================== Sistema do Mercador ====================
 class MerchantSystem:
@@ -325,6 +393,11 @@ class MerchantSystem:
         self.crop_system = crop_system
         self.player = player
         self.fishing_unlocked = False
+
+        if "Skyfish" not in [fish["name"] for fish in getattr(self, "fish_types", [])]:
+            pass
+        if "lazy_ghost" not in self.crop_system.available_crops:
+            self.crop_system.available_crops["lazy_ghost"] = Crop('lazy_ghost', 0, 30, 100, 'white', 0)
 
         self.inventory = {
             "seeds": {
@@ -348,10 +421,13 @@ class MerchantSystem:
             return "Invalid seed."
 
         seed = self.inventory["seeds"][seed_key]
-        if not self.player.can_afford(seed["price"]):
+        price = seed["price"]
+        if hasattr(self.player, "game") and getattr(self.player.game, 'market_inflated', False):
+            price *= 2
+        if not self.player.can_afford(price):
             return "Not enough money."
 
-        self.player.spend_money(seed["price"])
+        self.player.spend_money(price)
         result = self.crop_system.unlock_crop(seed["crop"])
         return result or f"{seed['crop'].capitalize()} is already unlocked."
 
@@ -397,12 +473,14 @@ class MerchantSystem:
 class FishingSystem:
     def __init__(self, player: Player):
         self.player = player
+        self.game = None
         self.caught_fish = []
 
         self.fish_types = [
             {"name": "Salmon", "value": 40},
             {"name": "Tuna", "value": 50},
-            {"name": "Golden Fish", "value": 100}
+            {"name": "Golden Fish", "value": 100},
+            {"name": "Skyfish", "value": 150},
         ]
 
     def fish(self) -> str:
@@ -415,7 +493,8 @@ class FishingSystem:
         return f"You caught a {fish['name']} worth ${fish['value']}!"
 
     def sell_all_fish(self) -> str:
-        total = sum(f["value"] for f in self.caught_fish)
+        bonus_multiplier = 1.5 if getattr(self, 'game', None) and getattr(self.game, 'fishing_bonus', False) else 1.0
+        total = sum(int(f["value"] * bonus_multiplier) for f in self.caught_fish)
         self.player.earn_money(total)
         self.caught_fish = []
         return f"Sold all fish for ${total}!"
@@ -436,6 +515,8 @@ class GameState(ISerializable):
         self.day_cycle_system = DayCycleSystem(self.time_system)
         self.merchant_system = MerchantSystem(self.crop_system, self.player)
         self.fishing_system = FishingSystem(self.player)
+        self.fishing_system.game = self
+        self.lazy_day_active = False
     
     def next_day(self) -> Tuple[bool, Optional[str]]:
         """Advance to next day, returns (success, event_message)"""
@@ -453,6 +534,13 @@ class GameState(ISerializable):
         elif self.time_system.day == 7 and 'pumpkin' not in self.crop_system.unlocked_crops:
             unlock_message = self.crop_system.unlock_crop('pumpkin')
         
+        self.market_inflated = False
+        self.fishing_bonus = False
+        if self.lazy_day_active:
+            self.player.max_stamina += 2
+            if self.player.stamina > self.player.max_stamina:
+                self.player.stamina = self.player.max_stamina
+            self.lazy_day_active = False
         event_message = self.event_system.update(self.time_system.day)
         
         return True, unlock_message or event_message
@@ -516,6 +604,7 @@ class GameState(ISerializable):
         self.event_system.game = self
         self.merchant_system = MerchantSystem(self.crop_system, self.player)
         self.fishing_system = FishingSystem(self.player)
+        self.fishing_system.game = self
         if 'merchant' in data and data['merchant'].get('fishing_unlocked'):
             self.merchant_system.fishing_unlocked = True
 
@@ -710,8 +799,14 @@ class TerminalUI:
             cost = self.color_text(f"${crop.cost}", "yellow")
             value = self.color_text(f"${crop.value}", "bright_yellow")
             stamina = self.color_text(f"{crop.stamina_cost}♥", "pink")
-            print(f"{self.color_text(f'{i}.', 'white')} {self.color_text(crop.name.capitalize(), crop.color)} "
-                  f"(Cost: {cost}, Value: {value}, Stamina: {stamina}, Time: {crop.growth_time}s)")
+            name = crop.name.capitalize()
+            rare_tag = ""
+            if 'rare' in name.lower():
+                name = name.replace(' [Rare]', '').replace(' [rare]', '')
+                rare_tag = self.color_text(" [Rare]", "orange")
+            name_display = self.color_text(name, crop.color)
+            print(f"{self.color_text(f'{i}.', 'white')} {name_display} "
+                  f"(Cost: {cost}, Value: {value}, Stamina: {stamina}, Time: {crop.growth_time}s){rare_tag}")
         
         try:
             choice = input(f"\n{self.color_text('Choose crop to plant', 'bright_cyan')} (0 to cancel): ")
@@ -749,7 +844,7 @@ class TerminalUI:
             self.game.player.use_stamina(crop.stamina_cost)
             self.game.farm.plant_crop(plot, crop)
             print(f"\n{self.color_text(f'Planted {crop.name} in plot {plot+1}!', 'green')}")
-            time.sleep(1)
+            time.sleep(2.6)
             
         except (ValueError, IndexError):
             input(f"{self.color_text('Invalid choice!', 'red')} Press Enter...")
@@ -768,7 +863,7 @@ class TerminalUI:
             print(f"{self.color_text(f'Harvested crops worth ${harvested_value}!', 'green')}")
         else:
             print(f"{self.color_text('Nothing ready to harvest yet!', 'yellow')}")
-        time.sleep(1)
+        time.sleep(2.6)
 
     def sleep_menu(self):
         self.clear_screen()
@@ -781,7 +876,7 @@ class TerminalUI:
         if choice == "1":
             if self.game.day_cycle_system.get_current_part() != "night":
                 print(self.color_text("\nYou can only sleep at night… try taking a nap.", "red"))
-                time.sleep(2)
+                time.sleep(2.6)
                 return
             success, message = self.game.next_day()
             self.game.player.full_restore()
@@ -790,14 +885,14 @@ class TerminalUI:
             print(self.color_text("\nYou slept soundly and woke up refreshed the next day!", "bright_green"))
             if message:
                 print(f"{self.color_text('EVENT:', 'bright_blue')} {message}")
-            time.sleep(2)
+            time.sleep(2.6)
         elif choice == "2":
             self.game.player.restore_stamina(1)
             
             self.game.day_cycle_system.current_part_index = (self.game.day_cycle_system.current_part_index + 1) % len(self.game.day_cycle_system.PARTS)
             self.game.day_cycle_system.last_update_time = datetime.now()
             print(self.color_text("\nYou took a nap and time passed... (+1 heart)", "green"))
-            time.sleep(2)
+            time.sleep(2.6)
 
     def start_game_loop(self):
         while True:
@@ -854,7 +949,7 @@ class TerminalUI:
                           f"{self.color_text(self.game.time_system.day, 'bright_blue')}!")
                     if message:
                         print(f"{self.color_text('EVENT:', 'bright_blue')} {message}")
-                    time.sleep(2)
+                    time.sleep(2.6)
                 else:
                     input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
             elif choice == "4":
@@ -876,13 +971,9 @@ class TerminalUI:
                     input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
                     continue
                 self.fishing_menu()
-            elif choice.lower() == "blackpink":
-                self.game.player.earn_money(10000)
-                print(self.color_text("BLACKPINK IN YOUR FARM 💸 +$10,000!", "bright_magenta"))
-                time.sleep(1)
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
-                time.sleep(1)
+                time.sleep(2.6)
 
     def merchant_menu(self):
         self.clear_screen()
@@ -896,7 +987,10 @@ class TerminalUI:
             already_unlocked = seed["crop"] in self.game.crop_system.unlocked_crops
             item_name = self.color_text(key, "gray" if already_unlocked else "cyan")
             unlock = self.color_text(f"(Unlocks {seed['crop'].capitalize()})", "grey")
-            print(f" - {item_name}: ${seed['price']} {unlock}")
+            inflated = hasattr(self.game, "market_inflated") and self.game.market_inflated
+            price_display = f"${seed['price'] * 2}" if inflated else f"${seed['price']}"
+            inflated_tag = self.color_text(" [INFLATED]", "red") if inflated else ""
+            print(f" - {item_name}: {price_display} {unlock}{inflated_tag}")
 
         print()
         print(self.color_text("🎁 Items:", "bright_blue"))
@@ -925,7 +1019,10 @@ class TerminalUI:
                 detail = self.color_text(f"({effect_description})", "grey") if effect_description else ""
             else:
                 detail = ""
-            print(f" - {item_name}: ${item['price']} {detail}")
+            inflated = hasattr(self.game, "market_inflated") and self.game.market_inflated
+            price_display = f"${item['price'] * 2}" if inflated else f"${item['price']}"
+            inflated_tag = self.color_text(" [INFLATED]", "red") if inflated else ""
+            print(f" - {item_name}: {price_display} {detail}{inflated_tag}")
 
         choice = input("\nWhat would you like to buy? (type item key or '0' to cancel): ").strip()
         if choice == "0":
@@ -946,13 +1043,13 @@ class TerminalUI:
 
         if is_error:
             print(self.color_text(msg, "red"))
-            time.sleep(2)
+            time.sleep(2.6)
         elif narrative:
             print(self.color_text(msg, "green"))
             input(self.color_text("\n(Press Enter to continue)", "white"))
         else:
             print(self.color_text(msg, "green"))
-            time.sleep(2)
+            time.sleep(2.6)
 
     def fishing_menu(self):
         self.clear_screen()
