@@ -541,7 +541,7 @@ class GameState(ISerializable):
         self.weather_system.update()
         self.day_cycle_system = DayCycleSystem(self.time_system)
         
-        # Farmdex fossil discovery system
+        
         if self.player.has_farmdex and self.time_system.day % 2 == 0:
             if random.random() < 0.75 and len(self.player.fossils_found) < 50:
                 all_fossils = [
@@ -943,12 +943,12 @@ class TerminalUI:
 
             if self.game.merchant_system.is_available(self.game.day_cycle_system.get_current_part()):
                 actions.append(f"{self.color_text('7.', 'cyan')} {self.color_text('Joji the Merchant', 'bright_yellow')}")
+
             if self.game.merchant_system.fishing_unlocked:
                 actions.append(f"{self.color_text('8.', 'cyan')} {self.color_text('Go Fishing', 'grey')}")
 
-            # Farmdex menu action
             if self.game.player.has_farmdex:
-                actions.append(f"{self.color_text(str(len(actions)+1)+'.', 'cyan')} {self.color_text('Farmdex', 'grey')}")
+                actions.append(f"{self.color_text('9.', 'cyan')} {self.color_text('Farmdex', 'grey')}")
 
             max_widths = [0, 0, 0]
             for i, action in enumerate(actions):
@@ -1008,7 +1008,7 @@ class TerminalUI:
                     input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
                     continue
                 self.fishing_menu()
-            elif choice == str(len(actions)) and self.game.player.has_farmdex:
+            elif choice == "9" and self.game.player.has_farmdex:
                 self.farmdex_menu()
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
