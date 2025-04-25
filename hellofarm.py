@@ -112,6 +112,8 @@ class Player(ISerializable):
         self.stamina = stamina
         self.max_stamina = max_stamina
         self.last_sleep_time = last_sleep_time or datetime.now()
+        self.has_farmdex = False
+        self.fossils_found = []
     
     def can_afford(self, amount: int) -> bool:
         return self.money >= amount
@@ -139,17 +141,22 @@ class Player(ISerializable):
             'money': self.money,
             'stamina': self.stamina,
             'max_stamina': self.max_stamina,
-            'last_sleep_time': self.last_sleep_time.isoformat()
+            'last_sleep_time': self.last_sleep_time.isoformat(),
+            'has_farmdex': getattr(self, 'has_farmdex', False),
+            'fossils_found': getattr(self, 'fossils_found', [])
         }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Player':
-        return cls(
+        obj = cls(
             money=data['money'],
             stamina=data['stamina'],
             max_stamina=data['max_stamina'],
             last_sleep_time=datetime.fromisoformat(data['last_sleep_time'])
         )
+        obj.has_farmdex = data.get('has_farmdex', False)
+        obj.fossils_found = data.get('fossils_found', [])
+        return obj
 
 # ==================== Sistemas do Jogo ====================
 class FarmSystem(ISerializable):
@@ -290,7 +297,7 @@ class EventSystem(IGameSystem):
         self.last_event_day = -1
     
     def update(self, current_day: int):
-        base_chance = 1.0  # 100% chance for testing purposes
+        base_chance = 1.0
         if random.random() < base_chance and self.last_event_day != current_day:
             self.last_event_day = current_day
             event = random.choice([
@@ -405,6 +412,7 @@ class MerchantSystem:
                 "blueberry_seed": {"crop": "blueberry", "price": 120}
             },
             "items": {
+                "farmdex_scanner": {"price": 300, "effect": "unlock_farmdex", "narrative": True},
                 "fishing_rod": {"price": 6666, "unlocks": "fishing"},
                 "golden_hat": {"price": 3333, "effect": "cosmetic", "narrative": True},
                 "lucky_egg": {"price": 5000, "effect": "increase_event_chance"},
@@ -447,6 +455,8 @@ class MerchantSystem:
             return "You already own this item."
         if item.get("effect") == "unlock_night_work" and getattr(self.player, "has_lantern", False):
             return "You already own this item."
+        if item.get("effect") == "unlock_farmdex" and getattr(self.player, "has_farmdex", False):
+            return "You already own this item."
 
         if not self.player.can_afford(item["price"]):
             return "Not enough money."
@@ -468,6 +478,9 @@ class MerchantSystem:
         elif item.get("effect") == "unlock_night_work":
             self.player.has_lantern = True
             return "You bought a lantern! Now you can work through the night."
+        elif item.get("effect") == "unlock_farmdex":
+            self.player.has_farmdex = True
+            return "Every two days, you have a 75% chance to discover a buried fossil! Help the local museum build the greatest dinosaur collection in history!"
         return "Item purchased."
 
 class FishingSystem:
@@ -527,6 +540,27 @@ class GameState(ISerializable):
         self.time_system.update()
         self.weather_system.update()
         self.day_cycle_system = DayCycleSystem(self.time_system)
+        
+        # Farmdex fossil discovery system
+        if self.player.has_farmdex and self.time_system.day % 2 == 0:
+            if random.random() < 0.75 and len(self.player.fossils_found) < 50:
+                all_fossils = [
+                    "Tyrannosaurus", "Triceratops", "Velociraptor", "Brachiosaurus", "Stegosaurus",
+                    "Spinosaurus", "Ankylosaurus", "Parasaurolophus", "Allosaurus", "Diplodocus",
+                    "Iguanodon", "Archaeopteryx", "Pteranodon", "Deinonychus", "Megalosaurus",
+                    "Pachycephalosaurus", "Corythosaurus", "Oviraptor", "Plateosaurus", "Styracosaurus",
+                    "Suchomimus", "Troodon", "Carnotaurus", "Sauropelta", "Albertosaurus",
+                    "Mamenchisaurus", "Edmontosaurus", "Herrerasaurus", "Giganotosaurus", "Therizinosaurus",
+                    "Kentrosaurus", "Dilophosaurus", "Coelophysis", "Protoceratops", "Sinraptor",
+                    "Rugops", "Lambeosaurus", "Mononykus", "Torosaurus", "Rhabdodon",
+                    "Ouranosaurus", "Microceratus", "Zuniceratops", "Einiosaurus", "Dromaeosaurus",
+                    "Massospondylus", "Lesothosaurus", "Noasaurus", "Gasparinisaura", "Minmi"
+                ]
+                undiscovered = [f for f in all_fossils if f not in self.player.fossils_found]
+                if undiscovered:
+                    found = random.choice(undiscovered)
+                    self.player.fossils_found.append(found)
+                    return True, f"NEW FOSSIL DISCOVERED: {found}!"
         
         unlock_message = None
         if self.time_system.day == 3 and 'corn' not in self.crop_system.unlocked_crops:
@@ -912,7 +946,10 @@ class TerminalUI:
             if self.game.merchant_system.fishing_unlocked:
                 actions.append(f"{self.color_text('8.', 'cyan')} {self.color_text('Go Fishing', 'grey')}")
 
-            
+            # Farmdex menu action
+            if self.game.player.has_farmdex:
+                actions.append(f"{self.color_text(str(len(actions)+1)+'.', 'cyan')} {self.color_text('Farmdex', 'grey')}")
+
             max_widths = [0, 0, 0]
             for i, action in enumerate(actions):
                 col = i % 3
@@ -931,7 +968,7 @@ class TerminalUI:
                 print(" | ".join(padded_row))
 
             choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
-            
+
             if choice == "1":
                 if self.game.day_cycle_system.get_current_part() == "night" and not getattr(self.game.player, "has_lantern", False):
                     input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
@@ -971,9 +1008,49 @@ class TerminalUI:
                     input(self.color_text("It's too dark to work without a lantern!", "red") + " Press Enter...")
                     continue
                 self.fishing_menu()
+            elif choice == str(len(actions)) and self.game.player.has_farmdex:
+                self.farmdex_menu()
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
                 time.sleep(2.6)
+
+    def farmdex_menu(self):
+        self.clear_screen()
+        print(self.color_text("🦖 Farmdex Collection", "bright_green"))
+        print(self.color_text(f"Fossils Discovered: {len(self.game.player.fossils_found)}/50", "cyan"))
+        print()
+        all_fossils = [
+            "Tyrannosaurus", "Triceratops", "Velociraptor", "Brachiosaurus", "Stegosaurus",
+            "Spinosaurus", "Ankylosaurus", "Parasaurolophus", "Allosaurus", "Diplodocus",
+            "Iguanodon", "Archaeopteryx", "Pteranodon", "Deinonychus", "Megalosaurus",
+            "Pachycephalosaurus", "Corythosaurus", "Oviraptor", "Plateosaurus", "Styracosaurus",
+            "Suchomimus", "Troodon", "Carnotaurus", "Sauropelta", "Albertosaurus",
+            "Mamenchisaurus", "Edmontosaurus", "Herrerasaurus", "Giganotosaurus", "Therizinosaurus",
+            "Kentrosaurus", "Dilophosaurus", "Coelophysis", "Protoceratops", "Sinraptor",
+            "Rugops", "Lambeosaurus", "Mononykus", "Torosaurus", "Rhabdodon",
+            "Ouranosaurus", "Microceratus", "Zuniceratops", "Einiosaurus", "Dromaeosaurus",
+            "Massospondylus", "Lesothosaurus", "Noasaurus", "Gasparinisaura", "Minmi"
+        ]
+        columns = 3
+        rows = (len(all_fossils) + columns - 1) // columns
+        fossil_entries = []
+
+        for name in all_fossils:
+            if name in self.game.player.fossils_found:
+                fossil_entries.append(self.color_text(name, 'bright_green'))
+            else:
+                fossil_entries.append(self.color_text('?????', 'gray'))
+
+        for row in range(rows):
+            line = ""
+            for col in range(columns):
+                idx = row + col * rows
+                if idx < len(fossil_entries):
+                    entry = fossil_entries[idx]
+                    entry_padded = entry + " " * (20 - len(self.strip_ansi(entry)))
+                    line += entry_padded
+            print(line)
+        input(self.color_text("\n(Press Enter to return)", "white"))
 
     def merchant_menu(self):
         self.clear_screen()
