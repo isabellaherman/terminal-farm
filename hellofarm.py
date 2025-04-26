@@ -646,6 +646,50 @@ class GameState(ISerializable):
 class TerminalUI:
     MENU_COOLDOWN_TIME = 2.6
 
+    EMOJI_HEART = "♥"
+
+    COLORS = {
+        "reset": "\033[0m",
+        "green": "\033[32m",
+        "bright_green": "\033[1;32m",
+        "yellow": "\033[33m",
+        "bright_yellow": "\033[1;33m",
+        "blue": "\033[34m",
+        "bright_blue": "\033[1;34m",
+        "cyan": "\033[36m",
+        "bright_cyan": "\033[1;36m",
+        "red": "\033[31m",
+        "bright_red": "\033[1;31m",
+        "orange": "\033[38;5;208m",
+        "gray": "\033[90m",
+        "white": "\033[97m",
+        "pink": "\033[38;5;213m",
+        "heart_red": "\033[38;5;161m"
+    }
+    
+    BG_COLORS = {
+        "reset": "\033[0m",
+        "orange": "\033[48;5;94m",
+        "yellow_pastel": "\033[48;5;187m",
+        "gray": "\033[48;5;240m",
+        "green": "\033[42m",
+        "green_custom": "\033[48;5;115m",
+    }
+
+    WEATHER_ICONS = {
+        "sunny": "☀️",
+        "rainy": "🌧️",
+        "cloudy": "☁️",
+        "windy": "🌬️"
+    }
+
+    SEASON_ICONS = {
+        "spring": "🌸",
+        "summer": "☀️",
+        "autumn": "🍂",
+        "winter": "❄️"
+    }
+
     def display_status(self):
         weather = self.game.weather_system.get_weather()
         weather_icon = self.WEATHER_ICONS.get(weather, '')
@@ -659,6 +703,7 @@ class TerminalUI:
         print(self.color_text('═' * header_width, 'bright_cyan'))
         print(content)
         print(self.color_text('═' * header_width, 'bright_cyan'))
+
     def display_farm(self):
         self.clear_screen()
         self.display_header()
@@ -689,46 +734,11 @@ class TerminalUI:
             for line in row_lines:
                 print(line)
             print()
-    COLORS = {
-        "reset": "\033[0m",
-        "green": "\033[32m",
-        
-        "bright_green": "\033[1;32m",
-        "yellow": "\033[33m",
-        "bright_yellow": "\033[1;33m",
-        "blue": "\033[34m",
-        "bright_blue": "\033[1;34m",
-        "cyan": "\033[36m",
-        "bright_cyan": "\033[1;36m",
-        "red": "\033[31m",
-        "bright_red": "\033[1;31m",
-        "orange": "\033[38;5;208m",
-        "gray": "\033[90m",
-        "white": "\033[97m",
-        "pink": "\033[38;5;213m",
-        "heart_red": "\033[38;5;161m"
-    }
-    
-    BG_COLORS = {
-        "reset": "\033[0m",
-        "orange": "\033[48;5;94m",
-        "yellow_pastel": "\033[48;5;187m",
-        "gray": "\033[48;5;240m",
-        "green": "\033[42m",
-        "green_custom": "\033[48;5;115m",
-    }
 
     def bg_color_text(self, text: str, fg_color: str, bg_color: str) -> str:
         fg = self.COLORS.get(fg_color, "")
         bg = self.BG_COLORS.get(bg_color, "")
         return f"{bg}{fg}{text}{self.COLORS['reset']}"
-    
-    WEATHER_ICONS = {
-        "sunny": "☀️",
-        "rainy": "🌧️",
-        "cloudy": "☁️",
-        "windy": "🌬️"
-    }
     
     def __init__(self, game_state: GameState):
         self.game = game_state
@@ -769,13 +779,10 @@ class TerminalUI:
             return "Good night"
 
     def get_season_icon(self) -> str:
-        icons = {
-            "spring": "🌸",
-            "summer": "☀️",
-            "autumn": "🍂",
-            "winter": "❄️"
-        }
-        return icons.get(self.game.day_cycle_system.get_season(), "")
+        return self.SEASON_ICONS.get(self.game.day_cycle_system.get_season(), "")
+    
+    def display_action_message(self, cancellable: bool = False, message: str = 'Choose action', cancel_message: str = "(0 to cancel): ") -> str:
+        return f"\n{self.color_text(message, 'bright_cyan')} {cancel_message if cancellable else ""}"
     
     def display_header(self):
         message = self.game.day_cycle_system.update()
@@ -845,7 +852,7 @@ class TerminalUI:
                   f"(Cost: {cost}, Value: {value}, Stamina: {stamina}, Time: {crop.growth_time}s){rare_tag}")
         
         try:
-            choice = input(f"\n{self.color_text('Choose crop to plant', 'bright_cyan')} (0 to cancel): ")
+            choice = input(self.display_action_message(message="Choose crop to plant", cancellable=True))
             if choice == "0":
                 return
             
@@ -904,11 +911,10 @@ class TerminalUI:
     def sleep_menu(self):
         self.clear_screen()
         print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
-        print(f"1. {self.color_text('Sleep until next day', 'cyan')} (Recover all hearts)")
-        print(f"2. {self.color_text('Take a nap (advance time)', 'cyan')} (Recover 1 heart)")
-        print(f"3. {self.color_text('Cancel', 'red')}")
+        print(f"1. {self.color_text('Sleep until next day', 'cyan')} (Recover all {self.EMOJI_HEART})")
+        print(f"2. {self.color_text('Take a nap (advance time)', 'cyan')} (+1 {self.EMOJI_HEART})")
         
-        choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
+        choice = input(self.display_action_message(cancellable=True))
         if choice == "1":
             if not self.game.day_cycle_system.is_night():
                 print(self.color_text("\nYou can only sleep at night… try taking a nap.", "red"))
@@ -927,7 +933,7 @@ class TerminalUI:
             
             self.game.day_cycle_system.current_part_index = (self.game.day_cycle_system.current_part_index + 1) % len(self.game.day_cycle_system.PARTS)
             self.game.day_cycle_system.last_update_time = datetime.now()
-            print(self.color_text("\nYou took a nap and time passed... (+1 heart)", "green"))
+            print(self.color_text(f"\nYou took a nap and time passed... (+1 {self.EMOJI_HEART})", "green"))
             time.sleep(self.MENU_COOLDOWN_TIME)
 
     def start_game_loop(self):
@@ -969,7 +975,7 @@ class TerminalUI:
                     padded_row.append(action + (" " * pad))
                 print(" | ".join(padded_row))
 
-            choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
+            choice = input(self.display_action_message())
 
             if choice == "1":
                 if self.game.day_cycle_system.get_current_part() == "night" and not getattr(self.game.player, "has_lantern", False):
@@ -1104,7 +1110,8 @@ class TerminalUI:
             inflated_tag = self.color_text(" [INFLATED]", "red") if inflated else ""
             print(f" - {item_name}: {price_display} {detail}{inflated_tag}")
 
-        choice = input("\nWhat would you like to buy? (type item key or '0' to cancel): ").strip()
+        choice = input(self.display_action_message(message="What would you like to buy?", cancellable=True, cancel_message=f"(type {self.color_text("item_key", "cyan")} or '0' to cancel): ")).strip()
+
         if choice == "0":
             return
         narrative = False
@@ -1138,7 +1145,7 @@ class TerminalUI:
         print(f"{self.color_text('1.', 'cyan')} Go fishing {self.color_text('(-2 ♥)', 'red')}")
         print(f"{self.color_text('2.', 'cyan')} Sell all fish")
 
-        choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} (0 to cancel): ")
+        choice = input(self.display_action_message(cancellable=True))
         if choice == "1":
             result = self.game.fishing_system.fish()
         elif choice == "2":
