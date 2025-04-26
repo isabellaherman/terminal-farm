@@ -644,6 +644,8 @@ class GameState(ISerializable):
 
 # ==================== Interface do Usuário ====================
 class TerminalUI:
+    MENU_COOLDOWN_TIME = 2.6
+
     def display_status(self):
         weather = self.game.weather_system.get_weather()
         weather_icon = self.WEATHER_ICONS.get(weather, '')
@@ -878,7 +880,7 @@ class TerminalUI:
             self.game.player.use_stamina(crop.stamina_cost)
             self.game.farm.plant_crop(plot, crop)
             print(f"\n{self.color_text(f'Planted {crop.name} in plot {plot+1}!', 'green')}")
-            time.sleep(2.6)
+            time.sleep(self.MENU_COOLDOWN_TIME)
             
         except (ValueError, IndexError):
             input(f"{self.color_text('Invalid choice!', 'red')} Press Enter...")
@@ -897,7 +899,7 @@ class TerminalUI:
             print(f"{self.color_text(f'Harvested crops worth ${harvested_value}!', 'green')}")
         else:
             print(f"{self.color_text('Nothing ready to harvest yet!', 'yellow')}")
-        time.sleep(2.6)
+        time.sleep(self.MENU_COOLDOWN_TIME)
 
     def sleep_menu(self):
         self.clear_screen()
@@ -906,11 +908,11 @@ class TerminalUI:
         print(f"2. {self.color_text('Take a nap (advance time)', 'cyan')} (Recover 1 heart)")
         print(f"3. {self.color_text('Cancel', 'red')}")
         
-        choice = input("\nChoose option: ")
+        choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
         if choice == "1":
-            if self.game.day_cycle_system.get_current_part() != "night":
+            if self.game.day_cycle_system.is_night():
                 print(self.color_text("\nYou can only sleep at night… try taking a nap.", "red"))
-                time.sleep(2.6)
+                time.sleep(self.MENU_COOLDOWN_TIME)
                 return
             success, message = self.game.next_day()
             self.game.player.full_restore()
@@ -919,14 +921,14 @@ class TerminalUI:
             print(self.color_text("\nYou slept soundly and woke up refreshed the next day!", "bright_green"))
             if message:
                 print(f"{self.color_text('EVENT:', 'bright_blue')} {message}")
-            time.sleep(2.6)
+            time.sleep(self.MENU_COOLDOWN_TIME)
         elif choice == "2":
             self.game.player.restore_stamina(1)
             
             self.game.day_cycle_system.current_part_index = (self.game.day_cycle_system.current_part_index + 1) % len(self.game.day_cycle_system.PARTS)
             self.game.day_cycle_system.last_update_time = datetime.now()
             print(self.color_text("\nYou took a nap and time passed... (+1 heart)", "green"))
-            time.sleep(2.6)
+            time.sleep(self.MENU_COOLDOWN_TIME)
 
     def start_game_loop(self):
         while True:
@@ -986,7 +988,7 @@ class TerminalUI:
                           f"{self.color_text(self.game.time_system.day, 'bright_blue')}!")
                     if message:
                         print(f"{self.color_text('EVENT:', 'bright_blue')} {message}")
-                    time.sleep(2.6)
+                    time.sleep(self.MENU_COOLDOWN_TIME)
                 else:
                     input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
             elif choice == "4":
@@ -1012,7 +1014,7 @@ class TerminalUI:
                 self.farmdex_menu()
             else:
                 print(f"{self.color_text('Invalid choice!', 'red')}")
-                time.sleep(2.6)
+                time.sleep(self.MENU_COOLDOWN_TIME)
 
     def farmdex_menu(self):
         self.clear_screen()
@@ -1121,22 +1123,22 @@ class TerminalUI:
 
         if is_error:
             print(self.color_text(msg, "red"))
-            time.sleep(2.6)
+            time.sleep(self.MENU_COOLDOWN_TIME)
         elif narrative:
             print(self.color_text(msg, "green"))
             input(self.color_text("\n(Press Enter to continue)", "white"))
         else:
             print(self.color_text(msg, "green"))
-            time.sleep(2.6)
+            time.sleep(self.MENU_COOLDOWN_TIME)
 
     def fishing_menu(self):
         self.clear_screen()
         print(self.color_text("🎣 Fishing Spot", "bright_blue"))
-        print("1. Go fishing (-2♥)")
-        print("2. Sell all fish")
-        print("3. Back")
 
-        choice = input("\nChoose an option: ").strip()
+        print(f"{self.color_text('1.', 'cyan')} Go fishing {self.color_text('(-2 ♥)', 'red')}")
+        print(f"{self.color_text('2.', 'cyan')} Sell all fish")
+
+        choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} (0 to cancel): ")
         if choice == "1":
             result = self.game.fishing_system.fish()
         elif choice == "2":
@@ -1184,6 +1186,9 @@ class DayCycleSystem(ISerializable):
 
     def get_current_part(self) -> str:
         return self.PARTS[self.current_part_index]
+
+    def is_night(self) -> bool:
+        return self.game.day_cycle_system.get_current_part() == "night"
 
     def to_dict(self):
         return {
