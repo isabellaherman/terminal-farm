@@ -911,8 +911,8 @@ class TerminalUI:
     def sleep_menu(self):
         self.clear_screen()
         print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
-        print(f"1. {self.color_text('Sleep until next day', 'cyan')} (Recover all {self.EMOJI_HEART})")
-        print(f"2. {self.color_text('Take a nap (advance time)', 'cyan')} (+1 {self.EMOJI_HEART})")
+        print(f"{self.color_text('1.', 'cyan')} Sleep until next day {self.color_text(f'(Recover all {self.EMOJI_HEART})', 'cyan')}")
+        print(f"{self.color_text('2.', 'cyan')} Take a nap (advance time) {self.color_text(f'(+1 {self.EMOJI_HEART})', 'cyan')}")
         
         choice = input(self.display_action_message(cancellable=True))
         if choice == "1":
