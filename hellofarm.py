@@ -1188,7 +1188,7 @@ class DayCycleSystem(ISerializable):
         return self.PARTS[self.current_part_index]
 
     def is_night(self) -> bool:
-        return self.game.day_cycle_system.get_current_part() == "night"
+        return self.get_current_part() == "night"
 
     def to_dict(self):
         return {
