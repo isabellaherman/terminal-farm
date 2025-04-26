@@ -910,7 +910,7 @@ class TerminalUI:
         
         choice = input(f"\n{self.color_text('Choose action:', 'bright_cyan')} ")
         if choice == "1":
-            if self.game.day_cycle_system.is_night():
+            if not self.game.day_cycle_system.is_night():
                 print(self.color_text("\nYou can only sleep at night… try taking a nap.", "red"))
                 time.sleep(self.MENU_COOLDOWN_TIME)
                 return
