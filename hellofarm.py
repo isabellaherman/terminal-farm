@@ -1057,6 +1057,7 @@ class TerminalUI:
         print(self.color_text("🧙‍♂️ Joji, the Morning Merchant", "bright_yellow"))
         print(self.color_text("═" * 40, "bright_cyan"))
         print(self.color_text("Welcome! Take a look at my goods:", "white"))
+        print(self.color_text(f"\n💰 Money: ${self.game.player.money}", "white"))
         print()
 
         print(self.color_text("🌱 Seeds:", "bright_blue"))
