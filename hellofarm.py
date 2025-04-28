@@ -782,7 +782,8 @@ class TerminalUI:
         return self.SEASON_ICONS.get(self.game.day_cycle_system.get_season(), "")
     
     def display_action_message(self, cancellable: bool = False, message: str = 'Choose action', cancel_message: str = "(0 to cancel): ") -> str:
-        return f"\n{self.color_text(message, 'bright_cyan')} {cancel_message if cancellable else ""}"
+        cancel_text = cancel_message if cancellable else ""
+        return f"\n{self.color_text(message, 'bright_cyan')} {cancel_text}"
     
     def display_header(self):
         message = self.game.day_cycle_system.update()
