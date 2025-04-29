@@ -1111,7 +1111,7 @@ class TerminalUI:
             inflated_tag = self.color_text(" [INFLATED]", "red") if inflated else ""
             print(f" - {item_name}: {price_display} {detail}{inflated_tag}")
 
-        choice = input(self.display_action_message(message="What would you like to buy?", cancellable=True, cancel_message=f"(type {self.color_text("item_key", "cyan")} or '0' to cancel): ")).strip()
+        choice = input(self.display_action_message(message="What would you like to buy?", cancellable=True, cancel_message=f"(type {self.color_text('item_key', 'cyan')} or '0' to cancel): ")).strip()
 
         if choice == "0":
             return
