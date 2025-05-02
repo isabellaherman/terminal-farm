@@ -1,2 +1,3 @@
 terminal_farmer_save.json
 .ruff_cache
+__pycache__

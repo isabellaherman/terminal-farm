@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "terminal_farm", from = "src"}]
+packages = [{include = "game", from = "src"}]
 
 
 [tool.poetry.group.dev.dependencies]
@@ -20,6 +20,3 @@ ruff = "^0.11.7"
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-game = "src.terminal_farm.hellofarm:main"

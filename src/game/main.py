@@ -4,179 +4,13 @@ import time
 import random
 import sys
 from datetime import datetime, timedelta
-from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple, Any
 
-
-# ==================== Interfaces e Classes Base ====================
-class ISerializable(ABC):
-    @abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Any:
-        pass
-
-
-class IGameSystem(ABC):
-    @abstractmethod
-    def update(self):
-        pass
-
-
-# ==================== Modelos do Jogo ====================
-class Crop(ISerializable):
-    def __init__(
-        self,
-        name: str,
-        cost: int,
-        growth_time: int,
-        value: int,
-        color: str,
-        stamina_cost: float,
-    ):
-        self.name = name
-        self.cost = cost
-        self.growth_time = growth_time
-        self.value = value
-        self.color = color
-        self.stamina_cost = stamina_cost
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "cost": self.cost,
-            "growth_time": self.growth_time,
-            "value": self.value,
-            "color": self.color,
-            "stamina_cost": self.stamina_cost,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Crop":
-        return cls(
-            name=data["name"],
-            cost=data["cost"],
-            growth_time=data["growth_time"],
-            value=data["value"],
-            color=data["color"],
-            stamina_cost=data["stamina_cost"],
-        )
-
-
-class Plot(ISerializable):
-    def __init__(
-        self, crop: Optional[Crop] = None, planted_at: Optional[datetime] = None
-    ):
-        self.crop = crop
-        self.planted_at = planted_at
-
-    @property
-    def is_empty(self) -> bool:
-        return self.crop is None
-
-    @property
-    def growth_progress(self) -> float:
-        if self.is_empty or self.planted_at is None:
-            return 0.0
-
-        elapsed = (datetime.now() - self.planted_at).total_seconds()
-        return min(1.0, elapsed / self.crop.growth_time)
-
-    @property
-    def is_ready(self) -> bool:
-        return self.growth_progress >= 1.0
-
-    def plant(self, crop: Crop):
-        self.crop = crop
-        self.planted_at = datetime.now()
-
-    def harvest(self) -> int:
-        if self.is_empty or not self.is_ready:
-            return 0
-
-        value = self.crop.value
-        self.crop = None
-        self.planted_at = None
-        return value
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "crop": self.crop.to_dict() if self.crop else None,
-            "planted_at": self.planted_at.isoformat() if self.planted_at else None,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Plot":
-        crop_data = data["crop"]
-        planted_at = data["planted_at"]
-
-        return cls(
-            crop=Crop.from_dict(crop_data) if crop_data else None,
-            planted_at=datetime.fromisoformat(planted_at) if planted_at else None,
-        )
-
-
-class Player(ISerializable):
-    def __init__(
-        self,
-        money: int = 50,
-        stamina: float = 5.0,
-        max_stamina: int = 5,
-        last_sleep_time: Optional[datetime] = None,
-    ):
-        self.money = money
-        self.stamina = stamina
-        self.max_stamina = max_stamina
-        self.last_sleep_time = last_sleep_time or datetime.now()
-        self.has_farmdex = False
-        self.fossils_found = []
-
-    def can_afford(self, amount: int) -> bool:
-        return self.money >= amount
-
-    def spend_money(self, amount: int):
-        self.money -= amount
-
-    def earn_money(self, amount: int):
-        self.money += amount
-
-    def has_stamina(self, amount: float) -> bool:
-        return self.stamina >= amount
-
-    def use_stamina(self, amount: float):
-        self.stamina -= amount
-
-    def restore_stamina(self, amount: float):
-        self.stamina = min(self.max_stamina, self.stamina + amount)
-
-    def full_restore(self):
-        self.stamina = self.max_stamina
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "money": self.money,
-            "stamina": self.stamina,
-            "max_stamina": self.max_stamina,
-            "last_sleep_time": self.last_sleep_time.isoformat(),
-            "has_farmdex": getattr(self, "has_farmdex", False),
-            "fossils_found": getattr(self, "fossils_found", []),
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Player":
-        obj = cls(
-            money=data["money"],
-            stamina=data["stamina"],
-            max_stamina=data["max_stamina"],
-            last_sleep_time=datetime.fromisoformat(data["last_sleep_time"]),
-        )
-        obj.has_farmdex = data.get("has_farmdex", False)
-        obj.fossils_found = data.get("fossils_found", [])
-        return obj
-
+from interfaces.serializable import ISerializable
+from interfaces.game_system import IGameSystem
+from model.crop import Crop
+from model.plot import Plot
+from model.player import Player
 
 # ==================== Sistemas do Jogo ====================
 class FarmSystem(ISerializable):
@@ -778,7 +612,7 @@ class TerminalUI:
         weather = self.game.weather_system.get_weather()
         weather_icon = self.WEATHER_ICONS.get(weather, "")
         money_text = f"💰 Money: ${self.game.player.money}"
-        weather_text = f"Weather: {weather_icon} {weather.capitalize()}"
+        weather_text = f"Weather: {weather_icon}  {weather.capitalize()}"
 
         header_width = self.last_box_width if hasattr(self, "last_box_width") else 50
         content = f"{money_text}   {weather_text}"
