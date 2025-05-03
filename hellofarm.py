@@ -1086,14 +1086,16 @@ class TerminalUI:
         print(self.color_text("🎁 Items:", "bright_blue"))
         for key, item in self.game.merchant_system.inventory["items"].items():
             already_owned = False
-            if item.get("unlocks") == "fishing" and self.game.merchant_system.fishing_unlocked:
+            if item.get["effect"] == "unlock_farmdex" and self.game.player.has_farmdex:
                 already_owned = True
+            elif item.get("unlocks") == "fishing" and self.game.merchant_system.fishing_unlocked:
+                already_owned = True
+            elif item.get("effect") == "cosmetic":
+                already_owned = hasattr(self.game.player, "bought_hat") and self.game.player.bought_hat
             elif item.get("effect") == "increase_event_chance" and hasattr(self.game.player, "event_bonus") and self.game.player.event_bonus == "lucky_egg":
                 already_owned = True
             elif item.get("effect") == "increase_max_stamina" and self.game.player.max_stamina > 5:
                 already_owned = True
-            elif item.get("effect") == "cosmetic":
-                already_owned = hasattr(self.game.player, "bought_hat") and self.game.player.bought_hat
             elif item.get("effect") == "unlock_night_work" and self.game.player.has_lantern:
                 already_owned = True
 
