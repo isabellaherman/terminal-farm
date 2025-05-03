@@ -66,6 +66,7 @@ class Crop(ISerializable):
         )
 
 
+# ==================== Sistema de cultivo ====================
 class Plot(ISerializable):
     def __init__(
         self, crop: Optional[Crop] = None, planted_at: Optional[datetime] = None
@@ -119,6 +120,7 @@ class Plot(ISerializable):
         )
 
 
+# ==================== Status do Player ====================
 class Player(ISerializable):
     def __init__(
         self,
@@ -228,6 +230,7 @@ class FarmSystem(ISerializable):
         return farm
 
 
+# ==================== Sistema de Colheita ====================
 class CropSystem(ISerializable):
     def __init__(self):
         self.available_crops = self._load_default_crops()
@@ -266,6 +269,7 @@ class CropSystem(ISerializable):
         return system
 
 
+# ==================== Sistema de Clima ====================
 class WeatherSystem(IGameSystem):
     WEATHER_TYPES = ["sunny", "rainy", "cloudy", "windy"]
 
@@ -289,6 +293,7 @@ class WeatherSystem(IGameSystem):
         return system
 
 
+# ==================== Sistema de Tempo ====================
 class TimeSystem(IGameSystem):
     def __init__(self):
         self.day = 1
@@ -309,6 +314,7 @@ class TimeSystem(IGameSystem):
         return system
 
 
+# ==================== Sistema de Eventos ====================
 class EventSystem(IGameSystem):
     def __init__(self, farm: FarmSystem, player: Player):
         self.farm = farm
@@ -540,6 +546,7 @@ class MerchantSystem:
         return "Item purchased."
 
 
+# ==================== Sistema de Pescaria ====================
 class FishingSystem:
     def __init__(self, player: Player):
         self.player = player
