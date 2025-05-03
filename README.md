@@ -4,46 +4,32 @@ A simple terminal-based farming game in Python.
 Plant, grow, and harvest crops — all from your terminal!
 
 ---
+# About
 
-## 🚀 How to Run
-
-1. **Make sure you have Python 3 installed**
-
-   ```bash
-   python3 --version
-   ```
-
-2. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/isabellaherman/terminal-farm.git
-   cd terminal-farm
-   ```
-
-3. **Run the game**
-
-   ```bash
-   python3 hellofarm.py
-   ```
+This repository contains **two versions** of our terminal farming game:
 
 ---
 
-## 💾 Features
+## 🌾 Legacy Version
 
-- 🌽 Plant and harvest different crops  
-- 🔓 Unlock new crops as you progress  
-- 🌤️ Weather system and random events  
-- 💾 Save and load game progress  
-- 🐍 Pure Python, no external libraries
-- FEATURE ESPECIAL: SUPLA. (Jogo meio em português meio em inglês)
+- **File:** `hellofarm.py`
+- **Description:** The original version of TerminalFarm, written entirely in a single Python file. Fully functional and nostalgic — it represents the early days of the project.
+- **Usage:** Run it with `python hellofarm.py`
 
 ---
 
-## ✅ Requirements
+## 🧩 Modular Version (in progress)
 
-- Python 3.x  
-- A terminal that supports ANSI colors (Linux, macOS, or Windows Terminal)
+- **Directory:** `TBD/`
+- **Description:** A modern, community-driven rewrite of the game, with modular, reusable components. Designed for scalability, clarity, and easier collaboration.
+- **Usage:** See the instructions in `TBD` to get started.
 
 ---
 
-Have fun farming! 🌾
+## 🤝 Contributing
+
+- Contributions are welcome for both versions!
+- The modular version is the main focus for ongoing development.
+- The `hellofarm.py` version is kept for historical reference (and it's still fun to hack on or learn from!).
+
+---
