@@ -200,18 +200,20 @@ class FarmSystem(ISerializable):
         return total
 
     def get_plot_status(self, plot_index: int) -> Tuple[Optional[Crop], float]:
-        if 0 <= plot_index < len(self.plots):
-            plot = self.plots[plot_index]
-            return plot.crop, plot.growth_progress
-        return None, 0.0
+        if plot_index not in range(len(self.plots)):
+            return None, 0.0
+
+        plot = self.plots[plot_index]
+        return plot.crop, plot.growth_progress
 
     def damage_random_crop(self):
         occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
-        if occupied_plots:
-            plot_idx = random.choice(occupied_plots)
-            self.plots[plot_idx] = Plot()
-            return "A storm came! Some crops were damaged."
-        return None
+        if not occupied_plots:
+            return None
+
+        plot_idx = random.choice(occupied_plots)
+        self.plots[plot_idx] = Plot()
+        return "A storm came! Some crops were damaged."
 
     def apply_growth_bonus(self, bonus_percent: float):
         for plot in self.plots:
@@ -251,10 +253,11 @@ class CropSystem(ISerializable):
         return self.available_crops.get(name)
 
     def unlock_crop(self, name: str):
-        if name in self.available_crops and name not in self.unlocked_crops:
-            self.unlocked_crops.append(name)
-            return f"NEW CROP UNLOCKED: {name.capitalize()}!"
-        return None
+        if name not in self.available_crops or name in self.unlocked_crops:
+            return None
+
+        self.unlocked_crops.append(name)
+        return f"NEW CROP UNLOCKED: {name.capitalize()}!"
 
     def get_unlocked_crops(self) -> List[Crop]:
         return [self.available_crops[name] for name in self.unlocked_crops]
@@ -323,28 +326,29 @@ class EventSystem(IGameSystem):
 
     def update(self, current_day: int):
         base_chance = 0.4
-        if random.random() < base_chance and self.last_event_day != current_day:
-            self.last_event_day = current_day
-            event = random.choice(
-                [
-                    self._storm_event,
-                    self._sunny_bonus_event,
-                    self._found_money_event,
-                    self._found_energy_event,
-                    self._fish_rain_event,
-                    self._plague_event,
-                    self._spirit_farmer_event,
-                    self._lazy_day_event,
-                    self._starry_night_event,
-                    self._inflated_market_event,
-                    self._night_robbery_event,
-                    self._perfect_fishing_day_event,
-                    self._rich_farmer_patron_event,
-                    self._sugar_daddy_marriage_event,
-                ]
-            )
-            return event()
-        return None
+        if random.random() >= base_chance or self.last_event_day == current_day:
+            return None
+
+        self.last_event_day = current_day
+        event = random.choice(
+            [
+                self._storm_event,
+                self._sunny_bonus_event,
+                self._found_money_event,
+                self._found_energy_event,
+                self._fish_rain_event,
+                self._plague_event,
+                self._spirit_farmer_event,
+                self._lazy_day_event,
+                self._starry_night_event,
+                self._inflated_market_event,
+                self._night_robbery_event,
+                self._perfect_fishing_day_event,
+                self._rich_farmer_patron_event,
+                self._sugar_daddy_marriage_event,
+            ]
+        )
+        return event()
 
     def _rich_farmer_patron_event(self):
         amount = 500
@@ -372,12 +376,10 @@ class EventSystem(IGameSystem):
         return "You found an energy drink! (+1 heart)"
 
     def _fish_rain_event(self):
-        if hasattr(self, "game") and hasattr(self.game, "fishing_system"):
-            self.game.fishing_system.caught_fish.append(
-                {"name": "Skyfish", "value": 150}
-            )
-            return "A mysterious rain dropped a Skyfish into your bucket! (+$150)"
-        return None
+        if not hasattr(self, "game") or not hasattr(self.game, "fishing_system"):
+            return None
+        self.game.fishing_system.caught_fish.append({"name": "Skyfish", "value": 150})
+        return "A mysterious rain dropped a Skyfish into your bucket! (+$150)"
 
     def _plague_event(self):
         damaged = 0
@@ -396,14 +398,15 @@ class EventSystem(IGameSystem):
         return "A benevolent spirit gifted you a Lazy Ghost Seed!"
 
     def _lazy_day_event(self):
-        if self.player.max_stamina > 1:
-            self.player.max_stamina -= 2
-            if self.player.stamina > self.player.max_stamina:
-                self.player.stamina = self.player.max_stamina
-            if hasattr(self, "game"):
-                self.game.lazy_day_active = True
-            return "You feel extremely lazy today... (-2 Max Hearts)"
-        return None
+        if self.player.max_stamina <= 1:
+            return None
+
+        self.player.max_stamina -= 2
+        if self.player.stamina > self.player.max_stamina:
+            self.player.stamina = self.player.max_stamina
+        if hasattr(self, "game"):
+            self.game.lazy_day_active = True
+        return "You feel extremely lazy today... (-2 Max Hearts)"
 
     def _starry_night_event(self):
         return self.farm.apply_growth_bonus(100)
