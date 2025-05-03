@@ -2,7 +2,7 @@ import random
 import json
 import os
 from interfaces.serializable import ISerializable
-from model.player import Player
+from domain.player import Player
 from service.farm_system import FarmSystem
 from service.crop_system import CropSystem
 from service.weather_system import WeatherSystem

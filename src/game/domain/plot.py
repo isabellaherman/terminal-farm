@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Any
 
 from interfaces.serializable import ISerializable
-from model.crop import Crop
+from domain.crop import Crop
 
 
 class Plot(ISerializable):

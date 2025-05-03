@@ -1,7 +1,7 @@
 import random
 from interfaces.game_system import IGameSystem
 from service.farm_system import FarmSystem
-from model.player import Player
+from domain.player import Player
 
 
 class EventSystem(IGameSystem):

@@ -1,8 +1,8 @@
 from datetime import timedelta
 import random
 from typing import Optional, Tuple, Any
-from model.crop import Crop
-from model.plot import Plot
+from domain.crop import Crop
+from domain.plot import Plot
 from interfaces.serializable import ISerializable
 
 

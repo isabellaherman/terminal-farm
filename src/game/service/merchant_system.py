@@ -1,5 +1,5 @@
-from model.player import Player
-from model.crop import Crop
+from domain.player import Player
+from domain.crop import Crop
 from service.crop_system import CropSystem
 from typing import Optional
 

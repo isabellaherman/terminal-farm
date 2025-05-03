@@ -1,5 +1,5 @@
 import random
-from model.player import Player
+from domain.player import Player
 
 
 class FishingSystem:

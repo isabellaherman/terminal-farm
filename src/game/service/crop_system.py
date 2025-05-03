@@ -1,5 +1,5 @@
 from typing import Optional, Any, List
-from model.crop import Crop
+from domain.crop import Crop
 from interfaces.serializable import ISerializable
 
 
