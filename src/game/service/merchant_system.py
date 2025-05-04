@@ -28,11 +28,16 @@ class MerchantSystem:
                     "effect": "unlock_farmdex",
                     "narrative": True,
                 },
-                "fishing_rod": {"price": 6666, "unlocks": "fishing"},
-                "golden_hat": {"price": 3333, "effect": "cosmetic", "narrative": True},
+                "fishing_rod": {"price": 5000, "unlocks": "fishing"},
+                "golden_hat": {"price": 6666, "effect": "cosmetic", "narrative": True},
                 "lucky_egg": {"price": 5000, "effect": "increase_event_chance"},
-                "balatro_card": {"price": 7777, "effect": "increase_max_stamina"},
-                "lantern": {"price": 5000, "effect": "unlock_night_work"},
+                "balatro_card": {"price": 8888, "effect": "increase_max_stamina"},
+                "lantern": {"price": 2000, "effect": "unlock_night_work"},
+                "sleep_pills": {
+                    "price": 3000,
+                    "effect": "unlock_anytime_sleep",
+                    "narrative": True,
+                },
             },
         }
 
@@ -86,6 +91,10 @@ class MerchantSystem:
             self.player, "has_farmdex", False
         ):
             return "You already own this item."
+        if item.get("effect") == "unlock_anytime_sleep" and getattr(
+            self.player, "can_sleep_anytime", False
+        ):
+            return "You already own this item."
 
         if not self.player.can_afford(item["price"]):
             return "Not enough money."
@@ -110,4 +119,7 @@ class MerchantSystem:
         elif item.get("effect") == "unlock_farmdex":
             self.player.has_farmdex = True
             return "Every two days, you have a 75% chance to discover a buried fossil! Help the local museum build the greatest dinosaur collection in history!"
+        elif item.get("effect") == "unlock_anytime_sleep":
+            self.player.can_sleep_anytime = True
+            return "You bought Sleep Pills! Now you can sleep anytime to skip the day."
         return "Item purchased."

@@ -17,6 +17,7 @@ class Player(ISerializable):
         self.last_sleep_time = last_sleep_time or datetime.now()
         self.has_farmdex = False
         self.fossils_found = []
+        self.can_sleep_anytime = False
 
     def can_afford(self, amount: int) -> bool:
         return self.money >= amount
@@ -47,6 +48,7 @@ class Player(ISerializable):
             "last_sleep_time": self.last_sleep_time.isoformat(),
             "has_farmdex": getattr(self, "has_farmdex", False),
             "fossils_found": getattr(self, "fossils_found", []),
+            "can_sleep_anytime": getattr(self, "can_sleep_anytime", False),
         }
 
     @classmethod
@@ -59,4 +61,5 @@ class Player(ISerializable):
         )
         obj.has_farmdex = data.get("has_farmdex", False)
         obj.fossils_found = data.get("fossils_found", [])
+        obj.can_sleep_anytime = data.get("can_sleep_anytime", False)
         return obj

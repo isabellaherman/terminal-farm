@@ -273,7 +273,9 @@ class TerminalUI:
 
         choice = input(self.display_action_message(cancellable=True))
         if choice == "1":
-            if not self.game.day_cycle_system.is_night():
+            if not self.game.day_cycle_system.is_night() and not getattr(
+                self.game.player, "can_sleep_anytime", False
+            ):
                 print(
                     self.color_text(
                         "\nYou can only sleep at night… try taking a nap.", "red"
@@ -574,6 +576,8 @@ class TerminalUI:
                     hasattr(self.game.player, "bought_hat")
                     and self.game.player.bought_hat
                 )
+            elif item.get("effect") == "unlock_anytime_sleep":
+                already_owned = getattr(self.game.player, "can_sleep_anytime", False)
 
             item_name = self.color_text(key, "gray" if already_owned else "cyan")
             if "unlocks" in item:
@@ -586,6 +590,7 @@ class TerminalUI:
                     "increase_event_chance": "Boosts daily events: 80% chance to occur each day!",
                     "increase_max_stamina": "Double your max stamina",
                     "unlock_night_work": "Allow you to work at night",
+                    "unlock_anytime_sleep": "Sleep anytime to recover stamina.",
                 }
                 effect_description = readable_effects.get(item.get("effect", ""), "")
                 detail = (
