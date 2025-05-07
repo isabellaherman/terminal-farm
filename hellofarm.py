@@ -115,6 +115,7 @@ class Player(ISerializable):
         self.has_farmdex = False
         self.has_lantern = False
         self.fossils_found = []
+        self.can_sleep_anytime = False
     
     def can_afford(self, amount: int) -> bool:
         return self.money >= amount
@@ -145,7 +146,8 @@ class Player(ISerializable):
             'last_sleep_time': self.last_sleep_time.isoformat(),
             'has_farmdex': getattr(self, 'has_farmdex', False),
             'has_lantern': getattr(self, 'has_lantern', False),
-            'fossils_found': getattr(self, 'fossils_found', [])
+            'fossils_found': getattr(self, 'fossils_found', []),
+            'can_sleep_anytime': getattr(self, 'can_sleep_anytime', False),
         }
     
     @classmethod
@@ -159,6 +161,7 @@ class Player(ISerializable):
         obj.has_farmdex = data.get('has_farmdex', False)
         obj.has_lantern = data.get('has_lantern', False)
         obj.fossils_found = data.get('fossils_found', [])
+        obj.can_sleep_anytime = data.get('can_sleep_anytime', False)
         return obj
 
 # ==================== Sistemas do Jogo ====================
@@ -416,11 +419,12 @@ class MerchantSystem:
             },
             "items": {
                 "farmdex_scanner": {"price": 300, "effect": "unlock_farmdex", "narrative": True},
-                "fishing_rod": {"price": 6666, "unlocks": "fishing"},
-                "golden_hat": {"price": 3333, "effect": "cosmetic", "narrative": True},
+                "fishing_rod": {"price": 5000, "unlocks": "fishing"},
+                "golden_hat": {"price": 6666, "effect": "cosmetic", "narrative": True},
                 "lucky_egg": {"price": 5000, "effect": "increase_event_chance"},
-                "balatro_card": {"price": 7777, "effect": "increase_max_stamina"},
-                "lantern": {"price": 5000, "effect": "unlock_night_work"}
+                "balatro_card": {"price": 8888, "effect": "increase_max_stamina"},
+                "lantern": {"price": 2000, "effect": "unlock_night_work"},
+                "sleep_pills": {"price": 3000, "effect": "unlock_anytime_sleep", "narrative": True}
             }
         }
 
@@ -460,6 +464,8 @@ class MerchantSystem:
             return "You already own this item."
         if item.get("effect") == "unlock_farmdex" and getattr(self.player, "has_farmdex", False):
             return "You already own this item."
+        if item.get("effect") == "unlock_anytime_sleep" and getattr(self.player, "can_sleep_anytime", False):
+            return "You already own this item."
 
         if not self.player.can_afford(item["price"]):
             return "Not enough money."
@@ -484,6 +490,9 @@ class MerchantSystem:
         elif item.get("effect") == "unlock_farmdex":
             self.player.has_farmdex = True
             return "Every two days, you have a 75% chance to discover a buried fossil! Help the local museum build the greatest dinosaur collection in history!"
+        elif item.get("effect") == "unlock_anytime_sleep":
+            self.player.can_sleep_anytime = True
+            return "You bought Sleep Pills! Now you can sleep anytime to skip the day."
         return "Item purchased."
 
 class FishingSystem:
@@ -920,7 +929,7 @@ class TerminalUI:
         
         choice = input(self.display_action_message(cancellable=True))
         if choice == "1":
-            if not self.game.day_cycle_system.is_night():
+            if not self.game.day_cycle_system.is_night() and not getattr(self.game.player, "can_sleep_anytime", False):
                 print(self.color_text("\nYou can only sleep at night… try taking a nap.", "red"))
                 time.sleep(self.MENU_COOLDOWN_TIME)
                 return
@@ -1096,8 +1105,12 @@ class TerminalUI:
                 already_owned = True
             elif item.get("effect") == "increase_max_stamina" and self.game.player.max_stamina > 5:
                 already_owned = True
-            elif item.get("effect") == "unlock_night_work" and self.game.player.has_lantern:
-                already_owned = True
+            elif item.get("effect") == "unlock_night_work":
+                already_owned = getattr(self.game.player, "has_lantern", False)
+            elif item.get("effect") == "cosmetic":
+                already_owned = hasattr(self.game.player, "bought_hat") and self.game.player.bought_hat
+            elif item.get("effect") == "unlock_anytime_sleep":
+                already_owned = getattr(self.game.player, "can_sleep_anytime", False)
 
             item_name = self.color_text(key, "gray" if already_owned else "cyan")
             if "unlocks" in item:
@@ -1107,7 +1120,8 @@ class TerminalUI:
                     "cosmetic": "Visual cosmetic item",
                     "increase_event_chance": "Boosts daily events: 80% chance to occur each day!",
                     "increase_max_stamina": "Double your max stamina",
-                    "unlock_night_work": "Allow you to work at night"
+                    "unlock_night_work": "Allow you to work at night",
+                    "unlock_anytime_sleep": "Sleep anytime to recover stamina.",
                 }
                 effect_description = readable_effects.get(item.get("effect", ""), "")
                 detail = self.color_text(f"({effect_description})", "grey") if effect_description else ""
