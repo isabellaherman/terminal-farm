@@ -107,12 +107,13 @@ class Plot(ISerializable):
 
 class Player(ISerializable):
     def __init__(self, money: int = 50, stamina: float = 5.0, 
-                 max_stamina: int = 5, last_sleep_time: Optional[datetime] = None):
+                 max_stamina: int = 5, last_sleep_time: Optional[datetime] = None,):
         self.money = money
         self.stamina = stamina
         self.max_stamina = max_stamina
         self.last_sleep_time = last_sleep_time or datetime.now()
         self.has_farmdex = False
+        self.has_lantern = False
         self.fossils_found = []
         self.can_sleep_anytime = False
     
@@ -144,6 +145,7 @@ class Player(ISerializable):
             'max_stamina': self.max_stamina,
             'last_sleep_time': self.last_sleep_time.isoformat(),
             'has_farmdex': getattr(self, 'has_farmdex', False),
+            'has_lantern': getattr(self, 'has_lantern', False),
             'fossils_found': getattr(self, 'fossils_found', []),
             'can_sleep_anytime': getattr(self, 'can_sleep_anytime', False),
         }
@@ -157,6 +159,7 @@ class Player(ISerializable):
             last_sleep_time=datetime.fromisoformat(data['last_sleep_time'])
         )
         obj.has_farmdex = data.get('has_farmdex', False)
+        obj.has_lantern = data.get('has_lantern', False)
         obj.fossils_found = data.get('fossils_found', [])
         obj.can_sleep_anytime = data.get('can_sleep_anytime', False)
         return obj
@@ -1092,12 +1095,18 @@ class TerminalUI:
         print(self.color_text("🎁 Items:", "bright_blue"))
         for key, item in self.game.merchant_system.inventory["items"].items():
             already_owned = False
-            if item.get("unlocks") == "fishing" and self.game.merchant_system.fishing_unlocked:
+            if item.get["effect"] == "unlock_farmdex" and self.game.player.has_farmdex:
                 already_owned = True
+            elif item.get("unlocks") == "fishing" and self.game.merchant_system.fishing_unlocked:
+                already_owned = True
+            elif item.get("effect") == "cosmetic":
+                already_owned = hasattr(self.game.player, "bought_hat") and self.game.player.bought_hat
             elif item.get("effect") == "increase_event_chance" and hasattr(self.game.player, "event_bonus") and self.game.player.event_bonus == "lucky_egg":
                 already_owned = True
             elif item.get("effect") == "increase_max_stamina" and self.game.player.max_stamina > 5:
                 already_owned = True
+            elif item.get("effect") == "unlock_night_work":
+                already_owned = getattr(self.game.player, "has_lantern", False)
             elif item.get("effect") == "cosmetic":
                 already_owned = hasattr(self.game.player, "bought_hat") and self.game.player.bought_hat
             elif item.get("effect") == "unlock_anytime_sleep":
