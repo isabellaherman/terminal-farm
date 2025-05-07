@@ -1095,7 +1095,7 @@ class TerminalUI:
         print(self.color_text("🎁 Items:", "bright_blue"))
         for key, item in self.game.merchant_system.inventory["items"].items():
             already_owned = False
-            if item.get["effect"] == "unlock_farmdex" and self.game.player.has_farmdex:
+            if item.get("effect") == "unlock_farmdex" and self.game.player.has_farmdex:
                 already_owned = True
             elif item.get("unlocks") == "fishing" and self.game.merchant_system.fishing_unlocked:
                 already_owned = True
