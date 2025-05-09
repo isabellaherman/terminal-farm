@@ -23,7 +23,7 @@ Plant, grow, and harvest crops — all from your terminal!
 3. **Run the game**
 
    ```bash
-   python3 hellofarm.py
+   python3 run.py
    ```
 
 ---
