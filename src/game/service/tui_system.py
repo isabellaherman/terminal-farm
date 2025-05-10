@@ -138,15 +138,10 @@ class TerminalUI:
         GREETING_LINE = f"{greeting}, {username}!"
         STAMINA_LINE = f"Stamina: {stamina_display}"
 
-        raw_title_left = TITLE_LINE_LEFT
-        raw_title_right = TITLE_LINE_RIGHT
-        raw_greeting = GREETING_LINE
-        raw_stamina = STAMINA_LINE
-
         content_width = (
             max(
                 len(TITLE_LINE_LEFT) + len(TITLE_LINE_RIGHT) + 2,
-                len(raw_greeting),
+                len(GREETING_LINE),
                 len(self.strip_ansi(stamina_display)) + len("Stamina: "),
             )
             + 6
@@ -159,7 +154,7 @@ class TerminalUI:
 
         centered_title = TITLE_LINE
         title_line = f"{self.color_text('║', 'bright_cyan')}{self.color_text(centered_title.ljust(BOX_WIDTH - 2), 'bright_green')}{self.color_text('║', 'bright_cyan')}"
-        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(raw_greeting.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
+        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(GREETING_LINE.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
         stamina_text = f"Stamina: {stamina_display}"
         padding = (BOX_WIDTH - 4) - len(self.strip_ansi(stamina_text))
         stamina_line = f"{self.color_text('║', 'bright_cyan')}  {stamina_text}{' ' * padding}  {self.color_text('║', 'bright_cyan')}"
@@ -268,7 +263,7 @@ class TerminalUI:
 
     def sleep_menu(self):
         self.clear_screen()
-        print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
+        print(f"{self.color_text('😴 Sleep Options', 'bright_blue')}\n")
         print(
             f"{self.color_text('1.', 'cyan')} Sleep until next day {self.color_text(f'(Recover all {TUIConstants.EMOJI_HEART})', 'cyan')}"
         )
@@ -288,7 +283,7 @@ class TerminalUI:
                 )
                 time.sleep(self.MENU_COOLDOWN_TIME)
                 return
-            success, message = self.game.next_day()
+            _, message = self.game.next_day()
             self.game.player.full_restore()
             self.game.player.last_sleep_time = datetime.now()
 
@@ -659,7 +654,7 @@ class TerminalUI:
 
     def fishing_menu(self):
         self.clear_screen()
-        print(self.color_text("🎣 Fishing Spot", "bright_blue"))
+        print(self.color_text("🎣 Fishing Spot\n", "bright_blue"))
 
         print(
             f"{self.color_text('1.', 'cyan')} Go fishing {self.color_text('(-2 ♥)', 'red')}"

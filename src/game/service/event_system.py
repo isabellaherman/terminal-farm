@@ -15,31 +15,31 @@ class EventSystem(IGameSystem):
         self.last_event_day = -1
 
     def update(self, current_day: int):
-        if (
-            random.random() < self.BASE_CHANCE_TO_EVENT
-            and self.last_event_day != current_day
-        ):
-            self.last_event_day = current_day
-            event = random.choice(
-                [
-                    self._storm_event,
-                    self._sunny_bonus_event,
-                    self._found_money_event,
-                    self._found_energy_event,
-                    self._fish_rain_event,
-                    self._plague_event,
-                    self._spirit_farmer_event,
-                    self._lazy_day_event,
-                    self._starry_night_event,
-                    self._inflated_market_event,
-                    self._night_robbery_event,
-                    self._perfect_fishing_day_event,
-                    self._rich_farmer_patron_event,
-                    self._sugar_daddy_marriage_event,
-                ]
-            )
-            return event()
-        return None
+        base_chance = 0.4
+        if random.random() >= base_chance or self.last_event_day == current_day:
+            return None
+
+        self.last_event_day = current_day
+        event = random.choice(
+            [
+                self._storm_event,
+                self._sunny_bonus_event,
+                self._found_money_event,
+                self._found_energy_event,
+                self._fish_rain_event,
+                self._plague_event,
+                self._spirit_farmer_event,
+                self._lazy_day_event,
+                self._starry_night_event,
+                self._inflated_market_event,
+                self._night_robbery_event,
+                self._perfect_fishing_day_event,
+                self._rich_farmer_patron_event,
+                self._sugar_daddy_marriage_event,
+            ]
+        )
+        return self._fish_rain_event()
+        return event()
 
     def _rich_farmer_patron_event(self):
         amount = 500
@@ -67,13 +67,15 @@ class EventSystem(IGameSystem):
         return "You found an energy drink! (+1 heart)"
 
     def _fish_rain_event(self):
-        if not (hasattr(self, "game") and hasattr(self.game, "fishing_system")):
+        if not hasattr(self, "game") or not hasattr(self.game, "fishing_system"):
             return
 
         skyfish: Fish = FishingConstants.FISH_TYPES["skyfish"]
 
         self.game.fishing_system.caught_fish.append(skyfish)
         return f"A mysterious rain dropped a {skyfish.name} into your bucket! (+${skyfish.price})"
+
+
 
     def _plague_event(self):
         if any(self.farm.damage_random_crop() for _ in range(2)):

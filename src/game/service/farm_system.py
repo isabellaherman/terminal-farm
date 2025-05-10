@@ -22,18 +22,20 @@ class FarmSystem(ISerializable):
         return total
 
     def get_plot_status(self, plot_index: int) -> Tuple[Optional[Crop], float]:
-        if 0 <= plot_index < len(self.plots):
-            plot = self.plots[plot_index]
-            return plot.crop, plot.growth_progress
-        return None, 0.0
+        if plot_index not in range(len(self.plots)):
+            return None, 0.0
+
+        plot = self.plots[plot_index]
+        return plot.crop, plot.growth_progress
 
     def damage_random_crop(self):
-        occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
-        if occupied_plots:
+            occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
+            if not occupied_plots:
+                return None
+
             plot_idx = random.choice(occupied_plots)
             self.plots[plot_idx] = Plot()
             return "A storm came! Some crops were damaged."
-        return None
 
     def apply_growth_bonus(self, bonus_percent: float):
         for plot in self.plots:
