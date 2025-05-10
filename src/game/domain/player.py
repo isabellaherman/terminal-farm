@@ -16,6 +16,7 @@ class Player(ISerializable):
         self.max_stamina = max_stamina
         self.last_sleep_time = last_sleep_time or datetime.now()
         self.has_farmdex = False
+        self.has_lantern = False
         self.fossils_found = []
         self.can_sleep_anytime = False
 
@@ -47,6 +48,7 @@ class Player(ISerializable):
             "max_stamina": self.max_stamina,
             "last_sleep_time": self.last_sleep_time.isoformat(),
             "has_farmdex": getattr(self, "has_farmdex", False),
+            "has_lantern": getattr(self, "has_lantern", False),
             "fossils_found": getattr(self, "fossils_found", []),
             "can_sleep_anytime": getattr(self, "can_sleep_anytime", False),
         }
@@ -60,6 +62,7 @@ class Player(ISerializable):
             last_sleep_time=datetime.fromisoformat(data["last_sleep_time"]),
         )
         obj.has_farmdex = data.get("has_farmdex", False)
+        obj.has_lantern = data.get("has_lantern", False)
         obj.fossils_found = data.get("fossils_found", [])
         obj.can_sleep_anytime = data.get("can_sleep_anytime", False)
         return obj

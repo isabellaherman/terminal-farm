@@ -13,7 +13,7 @@ from service.fishing_system import FishingSystem
 from service.daycycle_system import DayCycleSystem
 from typing import Optional, Any, Tuple
 from datetime import datetime
-from utils.constants import GameStateConstants
+from utils.constants import GameStateConstants, EventConstants
 
 
 class GameState(ISerializable):
@@ -43,9 +43,21 @@ class GameState(ISerializable):
         self.time_system.update()
         self.weather_system.update()
         self.day_cycle_system = DayCycleSystem(self.time_system)
+        self.__unlock_fossil()
 
+        unlock_message = self.__unlock_seed_roadmap()
+
+        self.__reset_day_bonus()
+
+        event_message = self.event_system.update(self.time_system.day)
+
+        return True, unlock_message or event_message
+
+    def __unlock_fossil(self) -> None:
         if self.player.has_farmdex and self.time_system.day % 2 == 0:
-            if random.random() < 0.75 and len(self.player.fossils_found) < 50:
+            if random.random() < 0.75 and len(self.player.fossils_found) < len(
+                GameStateConstants.FOSSILS
+            ):
                 undiscovered = [
                     f
                     for f in GameStateConstants.FOSSILS
@@ -56,25 +68,21 @@ class GameState(ISerializable):
                     self.player.fossils_found.append(found)
                     return True, f"NEW FOSSIL DISCOVERED: {found}!"
 
-        unlock_message = None
-        if self.time_system.day == 3 and "corn" not in self.crop_system.unlocked_crops:
-            unlock_message = self.crop_system.unlock_crop("corn")
-        elif (
-            self.time_system.day == 7
-            and "pumpkin" not in self.crop_system.unlocked_crops
-        ):
-            unlock_message = self.crop_system.unlock_crop("pumpkin")
+    def __unlock_seed_roadmap(self) -> str:
+        crop = GameStateConstants.UNLOCK_SEED_ROADMAP_DAYS.get(self.time_system.day)
 
+        if crop and crop not in self.crop_system.unlocked_crops:
+            return self.crop_system.unlock_crop(crop)
+
+    def __reset_day_bonus(self) -> None:
         self.market_inflated = False
         self.fishing_bonus = False
+        self.lazy_day_active = False
+
         if self.lazy_day_active:
-            self.player.max_stamina += 2
+            self.player.max_stamina += EventConstants.DEBUFF_STAMINA_LAZY_DAY
             if self.player.stamina > self.player.max_stamina:
                 self.player.stamina = self.player.max_stamina
-            self.lazy_day_active = False
-        event_message = self.event_system.update(self.time_system.day)
-
-        return True, unlock_message or event_message
 
     def save(self) -> bool:
         try:
@@ -101,8 +109,8 @@ class GameState(ISerializable):
             )
             if stamina_to_restore > 0:
                 self.player.restore_stamina(stamina_to_restore)
-
             return True
+
         except Exception as e:
             print(f"Error loading game: {e}")
             return False

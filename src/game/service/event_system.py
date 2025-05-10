@@ -2,17 +2,23 @@ import random
 from interfaces.game_system import IGameSystem
 from service.farm_system import FarmSystem
 from domain.player import Player
+from domain.fish import Fish
+from utils.constants import EventConstants, FishingConstants
 
 
 class EventSystem(IGameSystem):
+    BASE_CHANCE_TO_EVENT = 0.4
+
     def __init__(self, farm: FarmSystem, player: Player):
         self.farm = farm
         self.player = player
         self.last_event_day = -1
 
     def update(self, current_day: int):
-        base_chance = 0.4
-        if random.random() < base_chance and self.last_event_day != current_day:
+        if (
+            random.random() < self.BASE_CHANCE_TO_EVENT
+            and self.last_event_day != current_day
+        ):
             self.last_event_day = current_day
             event = random.choice(
                 [
@@ -61,22 +67,17 @@ class EventSystem(IGameSystem):
         return "You found an energy drink! (+1 heart)"
 
     def _fish_rain_event(self):
-        if hasattr(self, "game") and hasattr(self.game, "fishing_system"):
-            self.game.fishing_system.caught_fish.append(
-                {"name": "Skyfish", "value": 150}
-            )
-            return "A mysterious rain dropped a Skyfish into your bucket! (+$150)"
-        return None
+        if not (hasattr(self, "game") and hasattr(self.game, "fishing_system")):
+            return
+
+        skyfish: Fish = FishingConstants.FISH_TYPES["skyfish"]
+
+        self.game.fishing_system.caught_fish.append(skyfish)
+        return f"A mysterious rain dropped a {skyfish.name} into your bucket! (+${skyfish.price})"
 
     def _plague_event(self):
-        damaged = 0
-        for _ in range(2):
-            result = self.farm.damage_random_crop()
-            if result:
-                damaged += 1
-        if damaged:
+        if any(self.farm.damage_random_crop() for _ in range(2)):
             return "A mysterious plague destroyed some crops!"
-        return None
 
     def _spirit_farmer_event(self):
         if hasattr(self, "game") and hasattr(self.game, "crop_system"):
@@ -85,14 +86,16 @@ class EventSystem(IGameSystem):
         return "A benevolent spirit gifted you a Lazy Ghost Seed!"
 
     def _lazy_day_event(self):
-        if self.player.max_stamina > 1:
-            self.player.max_stamina -= 2
-            if self.player.stamina > self.player.max_stamina:
-                self.player.stamina = self.player.max_stamina
-            if hasattr(self, "game"):
-                self.game.lazy_day_active = True
-            return "You feel extremely lazy today... (-2 Max Hearts)"
-        return None
+        if self.player.max_stamina <= 1:
+            return
+
+        self.player.max_stamina -= EventConstants.DEBUFF_STAMINA_LAZY_DAY
+        self.player.stamina = min(self.player.stamina, self.player.max_stamina)
+
+        if hasattr(self, "game"):
+            self.game.lazy_day_active = True
+
+        return f"You feel extremely lazy today... (-{EventConstants.DEBUFF_STAMINA_LAZY_DAY} Max Hearts)"
 
     def _starry_night_event(self):
         return self.farm.apply_growth_bonus(100)
