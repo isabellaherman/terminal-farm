@@ -7,7 +7,7 @@ from utils.constants import TUIConstants
 
 class TerminalUI:
     MENU_COOLDOWN_TIME = 2.6
-    SPACE_BETWEEN_CROP_INFO = " " * 4
+    SPACE_BETWEEN_CROP_INFO = " " * 3
 
     def display_status(self):
         weather = self.game.weather_system.get_weather()
@@ -245,8 +245,8 @@ class TerminalUI:
                 f"{self.color_text(f'{i}.', 'white')} {self.color_text(name.ljust(max_name), c.color)}{self.SPACE_BETWEEN_CROP_INFO}"
                 f"💰 Cost: {self.color_text(f'${c.cost}'.ljust(max_cost), 'yellow')}{self.SPACE_BETWEEN_CROP_INFO}"
                 f"💵 Sell: {self.color_text(f'${c.value}'.ljust(max_value), 'bright_yellow')}{self.SPACE_BETWEEN_CROP_INFO}"
-                f"❤️ Stamina: {self.color_text(f'{c.stamina_cost} ♥'.ljust(max_stamina), 'pink')}{self.SPACE_BETWEEN_CROP_INFO}"
-                f"⏱️ Time: {f'{c.growth_time}s'.ljust(max_time)}{rare}"
+                f"❤️  Stamina: {self.color_text(f'{c.stamina_cost} ♥'.ljust(max_stamina), 'pink')}{self.SPACE_BETWEEN_CROP_INFO}"
+                f"⏱️  Time: {f'{c.growth_time}s'.ljust(max_time)}{rare}"
             )
 
     def harvest_menu(self):
