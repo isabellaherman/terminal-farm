@@ -66,6 +66,7 @@ class Crop(ISerializable):
         )
 
 
+# ==================== Sistema de cultivo ====================
 class Plot(ISerializable):
     def __init__(
         self, crop: Optional[Crop] = None, planted_at: Optional[datetime] = None
@@ -119,6 +120,7 @@ class Plot(ISerializable):
         )
 
 
+# ==================== Status do Player ====================
 class Player(ISerializable):
     def __init__(
         self,
@@ -198,18 +200,20 @@ class FarmSystem(ISerializable):
         return total
 
     def get_plot_status(self, plot_index: int) -> Tuple[Optional[Crop], float]:
-        if 0 <= plot_index < len(self.plots):
-            plot = self.plots[plot_index]
-            return plot.crop, plot.growth_progress
-        return None, 0.0
+        if plot_index not in range(len(self.plots)):
+            return None, 0.0
+
+        plot = self.plots[plot_index]
+        return plot.crop, plot.growth_progress
 
     def damage_random_crop(self):
         occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
-        if occupied_plots:
-            plot_idx = random.choice(occupied_plots)
-            self.plots[plot_idx] = Plot()
-            return "A storm came! Some crops were damaged."
-        return None
+        if not occupied_plots:
+            return None
+
+        plot_idx = random.choice(occupied_plots)
+        self.plots[plot_idx] = Plot()
+        return "A storm came! Some crops were damaged."
 
     def apply_growth_bonus(self, bonus_percent: float):
         for plot in self.plots:
@@ -228,6 +232,7 @@ class FarmSystem(ISerializable):
         return farm
 
 
+# ==================== Sistema de Colheita ====================
 class CropSystem(ISerializable):
     def __init__(self):
         self.available_crops = self._load_default_crops()
@@ -248,10 +253,11 @@ class CropSystem(ISerializable):
         return self.available_crops.get(name)
 
     def unlock_crop(self, name: str):
-        if name in self.available_crops and name not in self.unlocked_crops:
-            self.unlocked_crops.append(name)
-            return f"NEW CROP UNLOCKED: {name.capitalize()}!"
-        return None
+        if name not in self.available_crops or name in self.unlocked_crops:
+            return None
+
+        self.unlocked_crops.append(name)
+        return f"NEW CROP UNLOCKED: {name.capitalize()}!"
 
     def get_unlocked_crops(self) -> List[Crop]:
         return [self.available_crops[name] for name in self.unlocked_crops]
@@ -266,6 +272,7 @@ class CropSystem(ISerializable):
         return system
 
 
+# ==================== Sistema de Clima ====================
 class WeatherSystem(IGameSystem):
     WEATHER_TYPES = ["sunny", "rainy", "cloudy", "windy"]
 
@@ -289,6 +296,7 @@ class WeatherSystem(IGameSystem):
         return system
 
 
+# ==================== Sistema de Tempo ====================
 class TimeSystem(IGameSystem):
     def __init__(self):
         self.day = 1
@@ -309,6 +317,7 @@ class TimeSystem(IGameSystem):
         return system
 
 
+# ==================== Sistema de Eventos ====================
 class EventSystem(IGameSystem):
     def __init__(self, farm: FarmSystem, player: Player):
         self.farm = farm
@@ -317,28 +326,29 @@ class EventSystem(IGameSystem):
 
     def update(self, current_day: int):
         base_chance = 0.4
-        if random.random() < base_chance and self.last_event_day != current_day:
-            self.last_event_day = current_day
-            event = random.choice(
-                [
-                    self._storm_event,
-                    self._sunny_bonus_event,
-                    self._found_money_event,
-                    self._found_energy_event,
-                    self._fish_rain_event,
-                    self._plague_event,
-                    self._spirit_farmer_event,
-                    self._lazy_day_event,
-                    self._starry_night_event,
-                    self._inflated_market_event,
-                    self._night_robbery_event,
-                    self._perfect_fishing_day_event,
-                    self._rich_farmer_patron_event,
-                    self._sugar_daddy_marriage_event,
-                ]
-            )
-            return event()
-        return None
+        if random.random() >= base_chance or self.last_event_day == current_day:
+            return None
+
+        self.last_event_day = current_day
+        event = random.choice(
+            [
+                self._storm_event,
+                self._sunny_bonus_event,
+                self._found_money_event,
+                self._found_energy_event,
+                self._fish_rain_event,
+                self._plague_event,
+                self._spirit_farmer_event,
+                self._lazy_day_event,
+                self._starry_night_event,
+                self._inflated_market_event,
+                self._night_robbery_event,
+                self._perfect_fishing_day_event,
+                self._rich_farmer_patron_event,
+                self._sugar_daddy_marriage_event,
+            ]
+        )
+        return event()
 
     def _rich_farmer_patron_event(self):
         amount = 500
@@ -366,12 +376,10 @@ class EventSystem(IGameSystem):
         return "You found an energy drink! (+1 heart)"
 
     def _fish_rain_event(self):
-        if hasattr(self, "game") and hasattr(self.game, "fishing_system"):
-            self.game.fishing_system.caught_fish.append(
-                {"name": "Skyfish", "value": 150}
-            )
-            return "A mysterious rain dropped a Skyfish into your bucket! (+$150)"
-        return None
+        if not hasattr(self, "game") or not hasattr(self.game, "fishing_system"):
+            return None
+        self.game.fishing_system.caught_fish.append({"name": "Skyfish", "value": 150})
+        return "A mysterious rain dropped a Skyfish into your bucket! (+$150)"
 
     def _plague_event(self):
         damaged = 0
@@ -390,14 +398,15 @@ class EventSystem(IGameSystem):
         return "A benevolent spirit gifted you a Lazy Ghost Seed!"
 
     def _lazy_day_event(self):
-        if self.player.max_stamina > 1:
-            self.player.max_stamina -= 2
-            if self.player.stamina > self.player.max_stamina:
-                self.player.stamina = self.player.max_stamina
-            if hasattr(self, "game"):
-                self.game.lazy_day_active = True
-            return "You feel extremely lazy today... (-2 Max Hearts)"
-        return None
+        if self.player.max_stamina <= 1:
+            return None
+
+        self.player.max_stamina -= 2
+        if self.player.stamina > self.player.max_stamina:
+            self.player.stamina = self.player.max_stamina
+        if hasattr(self, "game"):
+            self.game.lazy_day_active = True
+        return "You feel extremely lazy today... (-2 Max Hearts)"
 
     def _starry_night_event(self):
         return self.farm.apply_growth_bonus(100)
@@ -540,6 +549,7 @@ class MerchantSystem:
         return "Item purchased."
 
 
+# ==================== Sistema de Pescaria ====================
 class FishingSystem:
     def __init__(self, player: Player):
         self.player = player
@@ -912,17 +922,11 @@ class TerminalUI:
         TITLE_LINE_LEFT = "🌱 TERMINAL FARM"
         TITLE_LINE_RIGHT = f"Day {day} ({current_part}) {season_icon} {season}"
         GREETING_LINE = f"{greeting}, {username}!"
-        STAMINA_LINE = f"Stamina: {stamina_display}"
-
-        raw_title_left = TITLE_LINE_LEFT
-        raw_title_right = TITLE_LINE_RIGHT
-        raw_greeting = GREETING_LINE
-        raw_stamina = STAMINA_LINE
 
         content_width = (
             max(
                 len(TITLE_LINE_LEFT) + len(TITLE_LINE_RIGHT) + 2,
-                len(raw_greeting),
+                len(GREETING_LINE),
                 len(self.strip_ansi(stamina_display)) + len("Stamina: "),
             )
             + 6
@@ -935,7 +939,7 @@ class TerminalUI:
 
         centered_title = TITLE_LINE
         title_line = f"{self.color_text('║', 'bright_cyan')}{self.color_text(centered_title.ljust(BOX_WIDTH - 2), 'bright_green')}{self.color_text('║', 'bright_cyan')}"
-        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(raw_greeting.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
+        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(GREETING_LINE.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
         stamina_text = f"Stamina: {stamina_display}"
         padding = (BOX_WIDTH - 4) - len(self.strip_ansi(stamina_text))
         stamina_line = f"{self.color_text('║', 'bright_cyan')}  {stamina_text}{' ' * padding}  {self.color_text('║', 'bright_cyan')}"
@@ -1060,7 +1064,7 @@ class TerminalUI:
                 )
                 time.sleep(self.MENU_COOLDOWN_TIME)
                 return
-            success, message = self.game.next_day()
+            _, message = self.game.next_day()
             self.game.player.full_restore()
             self.game.player.last_sleep_time = datetime.now()
 
