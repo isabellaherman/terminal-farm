@@ -29,13 +29,13 @@ class FarmSystem(ISerializable):
         return plot.crop, plot.growth_progress
 
     def damage_random_crop(self):
-            occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
-            if not occupied_plots:
-                return None
+        occupied_plots = [i for i, plot in enumerate(self.plots) if not plot.is_empty]
+        if not occupied_plots:
+            return None
 
-            plot_idx = random.choice(occupied_plots)
-            self.plots[plot_idx] = Plot()
-            return "A storm came! Some crops were damaged."
+        plot_idx = random.choice(occupied_plots)
+        self.plots[plot_idx] = Plot()
+        return "A storm came! Some crops were damaged."
 
     def apply_growth_bonus(self, bonus_percent: float):
         for plot in self.plots:

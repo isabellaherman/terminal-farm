@@ -15,8 +15,10 @@ class EventSystem(IGameSystem):
         self.last_event_day = -1
 
     def update(self, current_day: int):
-        base_chance = 0.4
-        if random.random() >= base_chance or self.last_event_day == current_day:
+        if (
+            random.random() >= self.BASE_CHANCE_TO_EVENT
+            or self.last_event_day == current_day
+        ):
             return None
 
         self.last_event_day = current_day
@@ -38,7 +40,6 @@ class EventSystem(IGameSystem):
                 self._sugar_daddy_marriage_event,
             ]
         )
-        return self._fish_rain_event()
         return event()
 
     def _rich_farmer_patron_event(self):
@@ -74,8 +75,6 @@ class EventSystem(IGameSystem):
 
         self.game.fishing_system.caught_fish.append(skyfish)
         return f"A mysterious rain dropped a {skyfish.name} into your bucket! (+${skyfish.price})"
-
-
 
     def _plague_event(self):
         if any(self.farm.damage_random_crop() for _ in range(2)):

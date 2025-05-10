@@ -136,7 +136,6 @@ class TerminalUI:
         TITLE_LINE_LEFT = "🌱 TERMINAL FARM"
         TITLE_LINE_RIGHT = f"Day {day} ({current_part}) {season_icon} {season}"
         GREETING_LINE = f"{greeting}, {username}!"
-        STAMINA_LINE = f"Stamina: {stamina_display}"
 
         content_width = (
             max(
