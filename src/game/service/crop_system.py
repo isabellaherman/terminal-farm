@@ -23,10 +23,11 @@ class CropSystem(ISerializable):
         return self.available_crops.get(name)
 
     def unlock_crop(self, name: str):
-        if name in self.available_crops and name not in self.unlocked_crops:
-            self.unlocked_crops.append(name)
-            return f"NEW CROP UNLOCKED: {name.capitalize()}!"
-        return None
+        if name not in self.available_crops or name in self.unlocked_crops:
+            return None
+
+        self.unlocked_crops.append(name)
+        return f"NEW CROP UNLOCKED: {name.capitalize()}!"
 
     def get_unlocked_crops(self) -> List[Crop]:
         return [self.available_crops[name] for name in self.unlocked_crops]

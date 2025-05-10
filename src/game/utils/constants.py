@@ -1,3 +1,6 @@
+from domain.fish import Fish
+
+
 class TUIConstants:
     EMOJI_HEART = "♥"
 
@@ -87,3 +90,22 @@ class GameStateConstants:
         "Gasparinisaura",
         "Minmi",
     ]
+
+    UNLOCK_SEED_ROADMAP_DAYS = {3: "corn", 7: "pumpkin"}
+
+
+class EventConstants:
+    DEBUFF_STAMINA_LAZY_DAY = 2
+
+
+class FishingConstants:
+    FISHES = ["salmon", "tuna", "golden_fish", "skyfish"]
+
+    FISH_TYPES = {
+        "salmon": Fish("Salmon", 40),
+        "tuna": Fish("Tuna", 50),
+        "golden_fish": Fish("Golden Fish", 100),
+        "skyfish": Fish("Skyfish", 150),
+    }
+
+    STAMINA_TO_FISH = 2

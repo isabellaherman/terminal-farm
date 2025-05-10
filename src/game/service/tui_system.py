@@ -7,6 +7,7 @@ from utils.constants import TUIConstants
 
 class TerminalUI:
     MENU_COOLDOWN_TIME = 2.6
+    SPACE_BETWEEN_CROP_INFO = " " * 3
 
     def display_status(self):
         weather = self.game.weather_system.get_weather()
@@ -135,17 +136,11 @@ class TerminalUI:
         TITLE_LINE_LEFT = "🌱 TERMINAL FARM"
         TITLE_LINE_RIGHT = f"Day {day} ({current_part}) {season_icon} {season}"
         GREETING_LINE = f"{greeting}, {username}!"
-        STAMINA_LINE = f"Stamina: {stamina_display}"
-
-        raw_title_left = TITLE_LINE_LEFT
-        raw_title_right = TITLE_LINE_RIGHT
-        raw_greeting = GREETING_LINE
-        raw_stamina = STAMINA_LINE
 
         content_width = (
             max(
                 len(TITLE_LINE_LEFT) + len(TITLE_LINE_RIGHT) + 2,
-                len(raw_greeting),
+                len(GREETING_LINE),
                 len(self.strip_ansi(stamina_display)) + len("Stamina: "),
             )
             + 6
@@ -158,7 +153,7 @@ class TerminalUI:
 
         centered_title = TITLE_LINE
         title_line = f"{self.color_text('║', 'bright_cyan')}{self.color_text(centered_title.ljust(BOX_WIDTH - 2), 'bright_green')}{self.color_text('║', 'bright_cyan')}"
-        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(raw_greeting.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
+        greeting_line = f"{self.color_text('║', 'bright_cyan')}  {self.color_text(GREETING_LINE.ljust(BOX_WIDTH - 4), 'green')}  {self.color_text('║', 'bright_cyan')}"
         stamina_text = f"Stamina: {stamina_display}"
         padding = (BOX_WIDTH - 4) - len(self.strip_ansi(stamina_text))
         stamina_line = f"{self.color_text('║', 'bright_cyan')}  {stamina_text}{' ' * padding}  {self.color_text('║', 'bright_cyan')}"
@@ -173,76 +168,80 @@ class TerminalUI:
 
     def plant_crop_menu(self):
         self.display_farm()
-        unlocked_crops = self.game.crop_system.get_unlocked_crops()
+        unlocked = self.game.crop_system.get_unlocked_crops()
+        self._display_crop_menu()
 
-        print(f"{self.color_text('Available Crops:', 'bright_blue')}")
-        for i, crop in enumerate(unlocked_crops, 1):
-            cost = self.color_text(f"${crop.cost}", "yellow")
-            value = self.color_text(f"${crop.value}", "bright_yellow")
-            stamina = self.color_text(f"{crop.stamina_cost}♥", "pink")
-            name = crop.name.capitalize()
-            rare_tag = ""
-            if "rare" in name.lower():
-                name = name.replace(" [Rare]", "").replace(" [rare]", "")
-                rare_tag = self.color_text(" [Rare]", "orange")
-            name_display = self.color_text(name, crop.color)
-            print(
-                f"{self.color_text(f'{i}.', 'white')} {name_display} "
-                f"(Cost: {cost}, Value: {value}, Stamina: {stamina}, Time: {crop.growth_time}s){rare_tag}"
+        choice = input(
+            self.display_action_message(
+                message="Choose crop to plant", cancellable=True
             )
+        )
+        if choice == "0":
+            return
 
         try:
-            choice = input(
-                self.display_action_message(
-                    message="Choose crop to plant", cancellable=True
-                )
-            )
-            if choice == "0":
-                return
+            crop = unlocked[int(choice) - 1]
+        except (ValueError, IndexError):
+            input(f"{self.color_text('Invalid choice!', 'red')} Press Enter...")
+            return
 
-            crop_idx = int(choice) - 1
-            if crop_idx < 0 or crop_idx >= len(unlocked_crops):
-                raise IndexError
+        if not self.game.player.has_stamina(crop.stamina_cost):
+            input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
+            return
 
-            crop = unlocked_crops[crop_idx]
+        if not self.game.player.can_afford(crop.cost):
+            input(f"{self.color_text('Not enough money!', 'red')} Press Enter...")
+            return
 
-            if not self.game.player.has_stamina(crop.stamina_cost):
-                input(f"{self.color_text('Not enough stamina!', 'red')} Press Enter...")
-                return
+        print(f"\n{self.color_text('Farm Layout:', 'bright_green')}")
+        for i in range(0, 9, 3):
+            print(f"{self.color_text(f'{i + 1}-{i + 3}', 'cyan')} ", end="")
+        print("\n")
 
-            if not self.game.player.can_afford(crop.cost):
-                input(f"{self.color_text('Not enough money!', 'red')} Press Enter...")
-                return
-
-            print(f"\n{self.color_text('Farm Layout:', 'bright_green')}")
-            for i in range(0, 9, 3):
-                print(f"{self.color_text(f'{i + 1}-{i + 3}', 'cyan')} ", end="")
-            print("\n")
-
+        try:
             plot = (
                 int(input(f"{self.color_text('Choose plot', 'bright_cyan')} (1-9): "))
                 - 1
             )
-            if plot < 0 or plot > 8:
-                return
-
-            if not self.game.farm.plots[plot].is_empty:
-                input(
-                    f"{self.color_text('Plot already occupied!', 'red')} Press Enter..."
-                )
-                return
-
-            self.game.player.spend_money(crop.cost)
-            self.game.player.use_stamina(crop.stamina_cost)
-            self.game.farm.plant_crop(plot, crop)
-            print(
-                f"\n{self.color_text(f'Planted {crop.name} in plot {plot + 1}!', 'green')}"
+            if plot < 0 or plot > 8 or not self.game.farm.plots[plot].is_empty:
+                raise ValueError
+        except ValueError:
+            input(
+                f"{self.color_text('Invalid or occupied plot!', 'red')} Press Enter..."
             )
-            time.sleep(self.MENU_COOLDOWN_TIME)
-
-        except (ValueError, IndexError):
-            input(f"{self.color_text('Invalid choice!', 'red')} Press Enter...")
             return
+
+        self.game.player.spend_money(crop.cost)
+        self.game.player.use_stamina(crop.stamina_cost)
+        self.game.farm.plant_crop(plot, crop)
+        print(
+            f"\n{self.color_text(f'Planted {crop.name} in plot {plot + 1}!', 'green')}"
+        )
+        time.sleep(self.MENU_COOLDOWN_TIME)
+
+    def _display_crop_menu(self):
+        unlocked = self.game.crop_system.get_unlocked_crops()
+        max_name = max(
+            len(c.name.replace(" [Rare]", "").replace(" [rare]", "")) for c in unlocked
+        )
+        max_cost = max(len(f"${c.cost}") for c in unlocked)
+        max_value = max(len(f"${c.value}") for c in unlocked)
+        max_stamina = max(len(f"{c.stamina_cost} ♥") for c in unlocked)
+        max_time = max(len(f"{c.growth_time}s") for c in unlocked)
+
+        print(self.color_text("Available Crops:", "bright_blue"))
+        for i, c in enumerate(unlocked, 1):
+            name = c.name.replace(" [Rare]", "").replace(" [rare]", "").capitalize()
+            rare = (
+                self.color_text(" [Rare]", "orange") if "rare" in c.name.lower() else ""
+            )
+            print(
+                f"{self.color_text(f'{i}.', 'white')} {self.color_text(name.ljust(max_name), c.color)}{self.SPACE_BETWEEN_CROP_INFO}"
+                f"💰 Cost: {self.color_text(f'${c.cost}'.ljust(max_cost), 'yellow')}{self.SPACE_BETWEEN_CROP_INFO}"
+                f"💵 Sell: {self.color_text(f'${c.value}'.ljust(max_value), 'bright_yellow')}{self.SPACE_BETWEEN_CROP_INFO}"
+                f"❤️  Stamina: {self.color_text(f'{c.stamina_cost} ♥'.ljust(max_stamina), 'pink')}{self.SPACE_BETWEEN_CROP_INFO}"
+                f"⏱️  Time: {f'{c.growth_time}s'.ljust(max_time)}{rare}"
+            )
 
     def harvest_menu(self):
         if not self.game.player.has_stamina(0.5):
@@ -263,7 +262,7 @@ class TerminalUI:
 
     def sleep_menu(self):
         self.clear_screen()
-        print(f"{self.color_text('Sleep Options:', 'bright_blue')}\n")
+        print(f"{self.color_text('😴 Sleep Options', 'bright_blue')}\n")
         print(
             f"{self.color_text('1.', 'cyan')} Sleep until next day {self.color_text(f'(Recover all {TUIConstants.EMOJI_HEART})', 'cyan')}"
         )
@@ -283,7 +282,7 @@ class TerminalUI:
                 )
                 time.sleep(self.MENU_COOLDOWN_TIME)
                 return
-            success, message = self.game.next_day()
+            _, message = self.game.next_day()
             self.game.player.full_restore()
             self.game.player.last_sleep_time = datetime.now()
 
@@ -561,6 +560,17 @@ class TerminalUI:
             ):
                 already_owned = True
             elif (
+                item.get("effect") == "unlock_farmdex" and self.game.player.has_farmdex
+            ):
+                already_owned = True
+            elif item.get("effect") == "cosmetic":
+                already_owned = (
+                    hasattr(self.game.player, "bought_hat")
+                    and self.game.player.bought_hat
+                )
+            elif item.get("effect") == "unlock_night_work":
+                already_owned = getattr(self.game.player, "has_lantern", False)
+            elif (
                 item.get("effect") == "increase_event_chance"
                 and hasattr(self.game.player, "event_bonus")
                 and self.game.player.event_bonus == "lucky_egg"
@@ -590,7 +600,7 @@ class TerminalUI:
                     "increase_event_chance": "Boosts daily events: 80% chance to occur each day!",
                     "increase_max_stamina": "Double your max stamina",
                     "unlock_night_work": "Allow you to work at night",
-                    "unlock_anytime_sleep": "Sleep anytime to recover stamina.",
+                    "unlock_anytime_sleep": "Sleep anytime to recover stamina",
                 }
                 effect_description = readable_effects.get(item.get("effect", ""), "")
                 detail = (
@@ -643,7 +653,7 @@ class TerminalUI:
 
     def fishing_menu(self):
         self.clear_screen()
-        print(self.color_text("🎣 Fishing Spot", "bright_blue"))
+        print(self.color_text("🎣 Fishing Spot\n", "bright_blue"))
 
         print(
             f"{self.color_text('1.', 'cyan')} Go fishing {self.color_text('(-2 ♥)', 'red')}"
