@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TerminalFarm</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="top-block">
+      <div class="date-info">
+        <span class="day">01</span>
+        <span class="time-season">Morning | 🌸 Spring</span>
+      </div>
+      <div class="status-info">
+        <div class="hearts" id="hearts-container"></div>
+        <div class="money">$150.000</div>
+      </div>
+    </header>
+
+    <main class="middle-block">
+      <div class="grid">
+        <!-- Repeating slot elements -->
+        <div class="slot" data-slot-id="1" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 01</div>
+        </div>
+        <div class="slot" data-slot-id="2" data-state="growing">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 02</div>
+        </div>
+        <div class="slot" data-slot-id="3" data-state="ready">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 03</div>
+        </div>
+        <div class="slot" data-slot-id="4" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 04</div>
+        </div>
+        <div class="slot" data-slot-id="5" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 05</div>
+        </div>
+        <div class="slot" data-slot-id="6" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 06</div>
+        </div>
+        <div class="slot" data-slot-id="7" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 07</div>
+        </div>
+        <div class="slot" data-slot-id="8" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 08</div>
+        </div>
+        <div class="slot" data-slot-id="9" data-state="empty">
+          <div class="crop-image"></div>
+          <div class="crop-status">Slot 09</div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="bottom-block">
+      <div class="actions-wrapper">
+        <div class="actions-block">
+          <h2 class="actions-title">Actions</h2>
+          <div class="actions-grid main-menu">
+            <button class="action primary">Plant Crop</button>
+            <button class="action">Harvest</button>
+            <button class="action">Next Day</button>
+            <button class="action">Sleep/Rest</button>
+            <button class="action">Go Fishing</button>
+            <button class="action">Joji, The Merchant</button>
+            <button class="action">Save</button>
+          </div>
+          <div class="actions-grid plant-menu hidden">
+            <div class="plant-scroll-wrapper">
+              <button class="action">
+                <div class="crop-left">Wheat</div>
+                <div class="crop-right">
+                  <span class="crop-cost">-$10</span>
+                  <span class="crop-profit">+$20</span>
+                  <span class="crop-time">⧗10s</span>
+                  <span class="crop-stamina"><img src="assets/full_h.svg" alt="heart" />0.5</span>
+                </div>
+              </button>
+              <button class="action">
+                <div class="crop-left">Corn</div>
+                <div class="crop-right">
+                  <span class="crop-cost">-$20</span>
+                  <span class="crop-profit">+$45</span>
+                  <span class="crop-time">⧗40s</span>
+                  <span class="crop-stamina"><img src="assets/full_h.svg" alt="heart" />1.0</span>
+                </div>
+              </button>
+              <button class="action">
+                <div class="crop-left">Rice</div>
+                <div class="crop-right">
+                  <span class="crop-cost">-$15</span>
+                  <span class="crop-profit">+$30</span>
+                  <span class="crop-time">⧗20s</span>
+                  <span class="crop-stamina"><img src="assets/full_h.svg" alt="heart" />0.8</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>  
+    </footer>
+  </div>
+
+<button class="back-button hidden">⬅ Back</button>
+
+<script src="script.js"></script>
+</body>
+</html>
